@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
+from config.settings import settings
 from config.ui_theme import (
     inject_styles, kpi_card, kpi_row, rank_row,
     COLOR_PROFIT, COLOR_LOSS, COLOR_NEUTRAL,
@@ -241,5 +242,6 @@ try:
 
 except Exception as e:
     st.error(f"データ取得エラー: {e}")
-    import traceback
-    st.code(traceback.format_exc())
+    if settings.SKIP_AUTH:
+        import traceback
+        st.code(traceback.format_exc())

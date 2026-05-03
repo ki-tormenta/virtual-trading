@@ -1,6 +1,4 @@
 """Streamlit エントリポイント。認証フロー（PKCE Google OAuth）を管理する。"""
-import urllib.parse
-
 import streamlit as st
 
 from config.settings import settings
@@ -21,26 +19,21 @@ init_db()
 # ── OAuth コールバック処理 ────────────────────────────────────────────────────
 
 def _handle_oauth_callback() -> bool:
-    """?code=... が URL にあればコールバックを処理して True を返す。"""
+    """?code=... が URL にあればコールバックを処理して True を返す。
+
+    flow_type="pkce" を使うため SDK が code_verifier を内部で管理する。
+    state のチェックは SDK 側で行われるため不要。
+    """
     code = st.query_params.get("code")
-    state = st.query_params.get("state")
-    if not code or not state:
+    if not code:
         return False
 
     try:
-        from infrastructure.auth.oauth_flow import get_verifier
         from infrastructure.auth.supabase_client import get_supabase_client
 
-        verifier = get_verifier(state)
-        if verifier is None:
-            st.error("認証フローが無効か期限切れです。もう一度ログインしてください。")
-            st.query_params.clear()
-            return True
-
         supabase = get_supabase_client()
-        auth_resp = supabase.auth.exchange_code_for_session(
-            {"auth_code": code, "code_verifier": verifier}
-        )
+        # SDK が sign_in_with_oauth 時に保存した code_verifier を内部で取り出して使う
+        auth_resp = supabase.auth.exchange_code_for_session({"auth_code": code})
 
         if auth_resp.user is None:
             st.error("認証に失敗しました。")
@@ -69,9 +62,6 @@ def _ensure_user_account(email: str) -> int:
 
     Returns:
         DB 上のユーザーID
-
-    Raises:
-        PermissionError: 招待されていないメールアドレスの場合
     """
     from sqlalchemy import select
 
@@ -117,35 +107,25 @@ def _show_login_page() -> None:
         st.markdown("<br>", unsafe_allow_html=True)
 
         try:
-            from infrastructure.auth.oauth_flow import create_verifier, store_verifier
             from infrastructure.auth.supabase_client import get_supabase_client
 
-            verifier, challenge = create_verifier()
             supabase = get_supabase_client()
-
+            # flow_type="pkce" により SDK が code_verifier を生成・保存し、
+            # コールバック時に exchange_code_for_session が自動で取り出す
             oauth_resp = supabase.auth.sign_in_with_oauth(
                 {
                     "provider": "google",
                     "options": {
                         "redirect_to": settings.APP_URL,
-                        "query_params": {
-                            "code_challenge": challenge,
-                            "code_challenge_method": "S256",
-                        },
+                        "flow_type": "pkce",
                     },
                 }
             )
 
-            # Supabase が生成した state を URL からパースしてキーに使う
-            parsed = urllib.parse.urlparse(oauth_resp.url)
-            supabase_state = urllib.parse.parse_qs(parsed.query).get("state", [None])[0]
-            if supabase_state:
-                store_verifier(supabase_state, verifier)
-
             st.link_button(
                 "🔐  Google でログイン",
                 oauth_resp.url,
-                use_container_width=True,
+                width="stretch",
             )
             st.caption(
                 "<div style='text-align:center'>招待されたアカウントでのみ利用できます</div>",
@@ -163,7 +143,7 @@ def _render_sidebar_logout() -> None:
         email = st.session_state.get("user_email", "")
         if email:
             st.caption(f"ログイン中: {email}")
-        if st.button("ログアウト", use_container_width=True):
+        if st.button("ログアウト", width="stretch"):
             st.session_state.clear()
             st.rerun()
 

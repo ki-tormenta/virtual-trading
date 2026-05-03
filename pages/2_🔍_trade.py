@@ -31,7 +31,7 @@ with col1:
         label_visibility="collapsed",
     )
 with col2:
-    search_btn = st.button("🔍 検索", use_container_width=True)
+    search_btn = st.button("🔍 検索", width="stretch")
 
 if search_btn and code_input:
     ticker = normalize_ticker(code_input)
@@ -112,7 +112,7 @@ if st.session_state.trade_ticker:
                         f"必要資金: ${subtotal:,.2f}  （+ 手数料 ${fee_est:.2f}、合計 ${subtotal + fee_est:,.2f}）"
                     )
 
-                if st.form_submit_button("買付注文を実行", use_container_width=True, type="primary"):
+                if st.form_submit_button("買付注文を実行", width="stretch", type="primary"):
                     try:
                         txs = TradeService().buy(
                             ticker, int(qty), memo=memo or None, tags=tags or None
@@ -184,7 +184,7 @@ if st.session_state.trade_ticker:
                     )
 
                     if st.form_submit_button(
-                        "売却注文を実行", use_container_width=True, type="primary"
+                        "売却注文を実行", width="stretch", type="primary"
                     ):
                         try:
                             tx = TradeService().sell(

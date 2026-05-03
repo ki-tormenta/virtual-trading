@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 
 from config.settings import settings
 
@@ -11,8 +11,3 @@ engine = create_engine(
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def get_session() -> Session:
-    """DBセッションを返す。呼び出し元でclose()すること。"""
-    return SessionLocal()
