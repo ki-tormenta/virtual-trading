@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\uuog\\\\Documents\\\\ClaudeProject\\\\virtual-trading\" -Recurse -Force)",
+      "Bash(Select-Object FullName)",
+      "Bash(ConvertTo-Csv -NoTypeInformation)",
+      "Bash(Out-String)",
+      "Bash(grep -E \"\\\\.\\(py|md|toml|lock|env\\)$|^d\")",
+      "Bash(python -c ' *)",
+      "Bash(uv run *)",
+      "Bash(uv add *)",
+      "Bash(git add *)"
+    ]
+  }
+}
