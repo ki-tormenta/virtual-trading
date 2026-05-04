@@ -1,6 +1,6 @@
 import streamlit as st
 
-from config.ui_theme import inject_styles
+from config.ui_theme import inject_styles, bottom_nav
 from core.auth import require_auth
 from core.services.portfolio_service import PortfolioService
 
@@ -41,3 +41,5 @@ if st.button("リセットを実行", disabled=(confirm != "RESET"), type="prima
     psvc.reset_portfolio()
     st.success("リセットが完了しました。現金残高を初期値に戻しました。")
     st.rerun()
+
+bottom_nav()

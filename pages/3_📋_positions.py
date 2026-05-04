@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from config.ui_theme import inject_styles
+from config.ui_theme import inject_styles, bottom_nav
 from core.auth import require_auth
 from core.services.portfolio_service import PortfolioService
 
@@ -84,3 +84,5 @@ try:
 
 except Exception as e:
     st.error(f"データ取得エラー: {e}")
+
+bottom_nav()

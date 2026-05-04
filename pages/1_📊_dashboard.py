@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 
 from config.settings import settings
 from config.ui_theme import (
-    inject_styles, kpi_card, kpi_row, rank_row,
+    inject_styles, kpi_card, kpi_row, rank_row, bottom_nav,
     COLOR_PROFIT, COLOR_LOSS, COLOR_NEUTRAL,
     COLOR_CASH, COLOR_JP, COLOR_US,
     PLOTLY_FONT, PLOTLY_BG, PLOTLY_GRID, PLOTLY_TICK_COLOR,
@@ -245,3 +245,5 @@ except Exception as e:
     if settings.SKIP_AUTH:
         import traceback
         st.code(traceback.format_exc())
+
+bottom_nav()

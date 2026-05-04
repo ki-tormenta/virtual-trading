@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
 
-from config.ui_theme import inject_styles, COLOR_PROFIT, PLOTLY_FONT, PLOTLY_BG
+from config.ui_theme import inject_styles, bottom_nav, COLOR_PROFIT, PLOTLY_FONT, PLOTLY_BG
 from core.exceptions import (
     InsufficientFundsError,
     InsufficientSharesError,
@@ -205,3 +205,5 @@ if st.session_state.trade_ticker:
 
     except (StockNotFoundError, PriceNotAvailableError) as e:
         st.error(f"株価取得エラー: {e}")
+
+bottom_nav()

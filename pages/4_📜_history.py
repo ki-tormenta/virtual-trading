@@ -3,7 +3,7 @@ from datetime import date, timedelta
 import pandas as pd
 import streamlit as st
 
-from config.ui_theme import inject_styles
+from config.ui_theme import inject_styles, bottom_nav
 from core.auth import require_auth
 from core.services.portfolio_service import PortfolioService
 from core.services.trade_service import normalize_ticker
@@ -99,3 +99,5 @@ try:
 
 except Exception as e:
     st.error(f"データ取得エラー: {e}")
+
+bottom_nav()
