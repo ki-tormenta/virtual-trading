@@ -91,9 +91,21 @@ class YfinanceSource(PriceDataSource):
         """
 
         def _fetch() -> dict:
-            info = yf.Ticker(ticker).info
-            if not info.get("longName") and not info.get("shortName"):
+            ticker_obj = yf.Ticker(ticker)
+            info = ticker_obj.info
+            name = info.get("longName") or info.get("shortName") or info.get("displayName")
+            if not name:
+                # fast_info は軽量APIなので info 失敗時のフォールバックに使う
+                try:
+                    fi = ticker_obj.fast_info
+                    name = getattr(fi, "display_name", None)
+                except Exception:
+                    pass
+            if not name:
                 raise StockNotFoundError(f"銘柄が見つかりません: {ticker}")
+            if not info.get("longName") and not info.get("shortName"):
+                info = dict(info)
+                info["longName"] = name
             return info
 
         return self._with_retry(_fetch, ticker)

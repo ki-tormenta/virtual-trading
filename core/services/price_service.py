@@ -83,6 +83,16 @@ class PriceService:
             repo = StockRepo(session)
             stock = repo.get_by_ticker(ticker)
             if stock is not None:
+                # 前回フォールバックでticker名のまま登録された場合、名前を再取得する
+                if stock.name == ticker:
+                    try:
+                        info = self._source.get_stock_info(ticker)
+                        stock.name = info.get("longName") or info.get("shortName") or ticker
+                        stock.sector = info.get("sector") or stock.sector
+                        session.commit()
+                        session.refresh(stock)
+                    except Exception:
+                        pass
                 return stock
 
             name = ticker
