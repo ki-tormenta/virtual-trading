@@ -96,10 +96,7 @@ class YfinanceSource(PriceDataSource):
                 raise StockNotFoundError(f"銘柄が見つかりません: {ticker}")
             return info
 
-        try:
-            return self._with_retry(_fetch, ticker)
-        except PriceNotAvailableError as e:
-            raise StockNotFoundError(str(e)) from e
+        return self._with_retry(_fetch, ticker)
 
     def _normalize_index(self, df: pd.DataFrame) -> pd.DataFrame:
         """DataFrameのインデックスをタイムゾーンなしのDatetimeIndexに正規化する。"""

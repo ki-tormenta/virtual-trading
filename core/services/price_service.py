@@ -5,7 +5,7 @@ import pandas as pd
 from core.models.price_history import PriceHistory
 from core.models.stock import Stock
 from core.repositories.stock_repo import StockRepo
-from core.exceptions import StockNotFoundError
+from core.exceptions import PriceNotAvailableError, StockNotFoundError
 from infrastructure.data_sources.yfinance_source import YfinanceSource
 from infrastructure.db.connection import SessionLocal
 
@@ -85,9 +85,18 @@ class PriceService:
             if stock is not None:
                 return stock
 
-            info = self._source.get_stock_info(ticker)
-            name = info.get("longName") or info.get("shortName") or ticker
-            sector = info.get("sector")
+            name = ticker
+            sector = None
+            try:
+                info = self._source.get_stock_info(ticker)
+                name = info.get("longName") or info.get("shortName") or ticker
+                sector = info.get("sector")
+            except StockNotFoundError:
+                raise
+            except PriceNotAvailableError:
+                # .info 取得失敗（レート制限等）→ history() で存在確認してフォールバック登録
+                self._source.get_close_price(ticker)  # 存在しなければここで StockNotFoundError
+
             market = "JP" if ticker.endswith(".T") else "US"
             code = ticker.replace(".T", "")
 
