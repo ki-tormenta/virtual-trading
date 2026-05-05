@@ -176,7 +176,7 @@ if not st.session_state.snapshot_taken:
         from core.services.portfolio_service import PortfolioService
 
         PortfolioService().take_snapshot()
-        PortfolioService(account_type="simulation").take_snapshot()
+        PortfolioService().take_all_simulation_snapshots()
     except Exception:
         pass
     st.session_state.snapshot_taken = True

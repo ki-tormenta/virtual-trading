@@ -247,53 +247,66 @@ try:
         "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>🎮 vs シミュレーション</p>",
         unsafe_allow_html=True,
     )
+    _SIM_COLORS = ["#f5a623", "#bd10e0", "#4a90e2", "#ff4757"]
     try:
-        sim_snapshots = PortfolioService(account_type="simulation").get_snapshot_history(from_date=_from)
-        if len(snapshots) >= 2 and len(sim_snapshots) >= 2:
-            # 両口座が重なる開始日を基準に 100 へ正規化
-            real_base = snapshots[0].total_assets
-            sim_base = sim_snapshots[0].total_assets
-            fig_sim = go.Figure()
-            fig_sim.add_trace(go.Scatter(
-                x=[s.date for s in snapshots],
-                y=[s.total_assets / real_base * 100 for s in snapshots],
-                mode="lines", name="実口座",
-                line=dict(color=COLOR_PROFIT, width=2.5),
-                hovertemplate="<b>%{x}</b><br>実口座: %{y:.1f}<extra></extra>",
-            ))
-            fig_sim.add_trace(go.Scatter(
-                x=[s.date for s in sim_snapshots],
-                y=[s.total_assets / sim_base * 100 for s in sim_snapshots],
-                mode="lines", name="シミュレーション",
-                line=dict(color="#f5a623", width=2, dash="dot"),
-                hovertemplate="<b>%{x}</b><br>シミュレーション: %{y:.1f}<extra></extra>",
-            ))
-            fig_sim.update_layout(
-                title=dict(text="資産推移比較（開始時 = 100）", font=dict(size=13, color="#c8d0e0")),
-                height=300,
-                font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
-                margin=dict(l=0, r=0, t=40, b=0),
-                plot_bgcolor=PLOTLY_BG, paper_bgcolor=PLOTLY_BG,
-                xaxis=dict(showgrid=True, gridcolor=PLOTLY_GRID, zeroline=False),
-                yaxis=dict(showgrid=True, gridcolor=PLOTLY_GRID, zeroline=False),
-                legend=dict(orientation="h", y=-0.15),
-                hovermode="x unified",
-            )
-            st.plotly_chart(fig_sim, use_container_width=True)
-
-            # 現在値の比較カード
-            sim_summary = PortfolioService(account_type="simulation").get_summary()
-            col_r, col_s = st.columns(2)
-            with col_r:
-                st.metric("実口座 総資産", f"¥{summary.total_assets:,.0f}",
-                          delta=f"{summary.total_pnl_rate:+.2f}%")
-            with col_s:
-                st.metric("シミュレーション 総資産", f"¥{sim_summary.total_assets:,.0f}",
-                          delta=f"{sim_summary.total_pnl_rate:+.2f}%")
+        scenarios = psvc.get_simulation_scenarios()
+        if not scenarios:
+            st.info("シミュレーションシナリオがまだありません。🎮 シミュレーションページで作成してください。")
         else:
-            st.info("シミュレーション口座のスナップショットが2日分以上揃うと比較グラフが表示されます。")
+            # 各シナリオのスナップショットを取得
+            sim_data: list[tuple[str, list]] = []
+            for name in scenarios:
+                snaps = PortfolioService(account_type="simulation", scenario_name=name).get_snapshot_history(from_date=_from)
+                if len(snaps) >= 2:
+                    sim_data.append((name, snaps))
+
+            if len(snapshots) >= 2 and sim_data:
+                real_base = snapshots[0].total_assets
+                fig_sim = go.Figure()
+                fig_sim.add_trace(go.Scatter(
+                    x=[s.date for s in snapshots],
+                    y=[s.total_assets / real_base * 100 for s in snapshots],
+                    mode="lines", name="実口座",
+                    line=dict(color=COLOR_PROFIT, width=2.5),
+                    hovertemplate="<b>%{x}</b><br>実口座: %{y:.1f}<extra></extra>",
+                ))
+                for (name, snaps), color in zip(sim_data, _SIM_COLORS):
+                    sim_base = snaps[0].total_assets
+                    fig_sim.add_trace(go.Scatter(
+                        x=[s.date for s in snaps],
+                        y=[s.total_assets / sim_base * 100 for s in snaps],
+                        mode="lines", name=name,
+                        line=dict(color=color, width=2, dash="dot"),
+                        hovertemplate=f"<b>%{{x}}</b><br>{name}: %{{y:.1f}}<extra></extra>",
+                    ))
+                fig_sim.update_layout(
+                    title=dict(text="資産推移比較（開始時 = 100）", font=dict(size=13, color="#c8d0e0")),
+                    height=300,
+                    font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
+                    margin=dict(l=0, r=0, t=40, b=0),
+                    plot_bgcolor=PLOTLY_BG, paper_bgcolor=PLOTLY_BG,
+                    xaxis=dict(showgrid=True, gridcolor=PLOTLY_GRID, zeroline=False),
+                    yaxis=dict(showgrid=True, gridcolor=PLOTLY_GRID, zeroline=False),
+                    legend=dict(orientation="h", y=-0.15),
+                    hovermode="x unified",
+                )
+                st.plotly_chart(fig_sim, use_container_width=True)
+
+                # 現在値の比較カード（実口座 + 各シナリオ）
+                cards = [("実口座", summary.total_assets, summary.total_pnl_rate)]
+                for name in scenarios:
+                    try:
+                        s = PortfolioService(account_type="simulation", scenario_name=name).get_summary()
+                        cards.append((name, s.total_assets, s.total_pnl_rate))
+                    except Exception:
+                        pass
+                cols = st.columns(len(cards))
+                for col, (label, assets, rate) in zip(cols, cards):
+                    col.metric(label, f"¥{assets:,.0f}", delta=f"{rate:+.2f}%")
+            else:
+                st.info("シナリオのスナップショットが2日分以上揃うと比較グラフが表示されます。")
     except Exception:
-        st.info("シミュレーション口座はまだ作成されていません。🎮 シミュレーションページで取引を開始してください。")
+        st.info("シミュレーションシナリオがまだありません。🎮 シミュレーションページで作成してください。")
 
 except Exception as e:
     st.error(f"データ取得エラー: {e}")

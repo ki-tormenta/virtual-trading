@@ -49,15 +49,17 @@ def _append_tag(existing: str | None, new_tag: str) -> str:
 class TradeService:
     """売買ロジックを担当するサービス。"""
 
-    def __init__(self, account_type: str = "real") -> None:
+    def __init__(self, account_type: str = "real", scenario_name: str | None = None) -> None:
         self._price_service = PriceService()
         self._account_type = account_type
+        self._scenario_name = scenario_name
 
     def _get_account(self, session, user_id: int):
         from config.settings import settings as _s
         repo = AccountRepo(session)
         if self._account_type == "simulation":
-            return repo.get_or_create_simulation_account(user_id, _s.INITIAL_CASH)
+            name = self._scenario_name or "シナリオ1"
+            return repo.get_or_create_simulation_account(user_id, _s.INITIAL_CASH, name)
         account = repo.get_main_account(user_id)
         if account is None:
             raise RuntimeError("口座が見つかりません")

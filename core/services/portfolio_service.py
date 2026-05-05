@@ -78,16 +78,18 @@ class SnapshotRecord:
 class PortfolioService:
     """損益計算・スナップショット管理を担当するサービス。"""
 
-    def __init__(self, account_type: str = "real") -> None:
+    def __init__(self, account_type: str = "real", scenario_name: str | None = None) -> None:
         self._price_service = PriceService()
         self._account_type = account_type
+        self._scenario_name = scenario_name
 
     def _get_account(self, session):
         from config.settings import settings as _s
         user_id = get_current_user_id()
         repo = AccountRepo(session)
         if self._account_type == "simulation":
-            return repo.get_or_create_simulation_account(user_id, _s.INITIAL_CASH)
+            name = self._scenario_name or "シナリオ1"
+            return repo.get_or_create_simulation_account(user_id, _s.INITIAL_CASH, name)
         return repo.get_main_account(user_id)
 
     def get_summary(self) -> PortfolioSummary:
@@ -288,6 +290,24 @@ class PortfolioService:
         with SessionLocal() as session:
             TransactionRepo(session).update_memo(transaction_id, memo)
             session.commit()
+
+    def get_simulation_scenarios(self) -> list[str]:
+        """ユーザーの全シミュレーションシナリオ名を返す。"""
+        user_id = get_current_user_id()
+        with SessionLocal() as session:
+            accounts = AccountRepo(session).get_simulation_accounts(user_id)
+            return [a.name for a in accounts]
+
+    def take_all_simulation_snapshots(self) -> None:
+        """全シミュレーションシナリオのスナップショットを取得する。"""
+        user_id = get_current_user_id()
+        with SessionLocal() as session:
+            names = [a.name for a in AccountRepo(session).get_simulation_accounts(user_id)]
+        for name in names:
+            try:
+                PortfolioService(account_type="simulation", scenario_name=name).take_snapshot()
+            except Exception:
+                pass
 
     def reset_portfolio(self) -> None:
         """全取引・ポジション・スナップショットを削除し、現金残高を初期値に戻す。"""
