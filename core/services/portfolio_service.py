@@ -298,6 +298,20 @@ class PortfolioService:
             accounts = AccountRepo(session).get_simulation_accounts(user_id)
             return [a.name for a in accounts]
 
+    def create_simulation_scenario(self, scenario_name: str) -> None:
+        """シミュレーションシナリオ（口座）を作成してコミットする。
+
+        Raises:
+            RuntimeError: 上限4つに達している場合
+        """
+        from config.settings import settings as _s
+        user_id = get_current_user_id()
+        with SessionLocal() as session:
+            AccountRepo(session).get_or_create_simulation_account(
+                user_id, _s.INITIAL_CASH, scenario_name
+            )
+            session.commit()
+
     def take_all_simulation_snapshots(self) -> None:
         """全シミュレーションシナリオのスナップショットを取得する。"""
         user_id = get_current_user_id()

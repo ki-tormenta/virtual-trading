@@ -67,7 +67,7 @@ if st.session_state.get("sim_creating"):
                 st.error("同じ名前のシナリオがすでにあります")
             else:
                 try:
-                    PortfolioService(account_type=_SIM, scenario_name=name).get_summary()
+                    psvc_base.create_simulation_scenario(name)
                     st.session_state.sim_creating = False
                     st.rerun()
                 except Exception as e:
