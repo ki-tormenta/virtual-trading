@@ -302,7 +302,7 @@ class PortfolioService:
         writer = csv.writer(output)
         writer.writerow([
             "日付", "種別", "銘柄名", "ティッカー", "市場",
-            "数量", "価格（現地通貨）", "合計金額（現地通貨）", "実現損益(円)", "メモ", "タグ",
+            "数量", "価格（現地通貨）", "合計金額（現地通貨）", "手数料(円)", "税金(円)", "実現損益(円)", "メモ", "タグ",
         ])
         for r in records:
             writer.writerow([
@@ -314,6 +314,8 @@ class PortfolioService:
                 r.quantity,
                 r.price,
                 r.total_amount,
+                r.fee if r.fee else "",
+                r.tax if r.tax else "",
                 r.realized_pnl if r.realized_pnl is not None else "",
                 r.memo or "",
                 r.tags or "",
