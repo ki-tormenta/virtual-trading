@@ -10,7 +10,14 @@
       "Bash(python -c ' *)",
       "Bash(uv run *)",
       "Bash(uv add *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)",
+      "Bash(gh repo *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\uuog\\\\Documents\\\\ClaudeProject\\\\virtual-trading\" -Recurse -Include \"*.py\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(git push *)",
+      "Bash(git rm *)"
     ]
   }
 }

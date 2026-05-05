@@ -357,7 +357,8 @@ def bottom_nav() -> None:
         st.page_link("app.py",                    label="🏠 ホーム",          use_container_width=True)
         st.page_link("pages/1_📊_dashboard.py",   label="📊 ダッシュボード",  use_container_width=True)
         st.page_link("pages/3_📋_positions.py",   label="📋 ポジション",      use_container_width=True)
+        st.page_link("pages/6_⚙️_settings.py",   label="⚙️ 設定",            use_container_width=True)
     with col2:
         st.page_link("pages/2_🔍_trade.py",       label="🔍 売買",            use_container_width=True)
         st.page_link("pages/4_📜_history.py",     label="📜 取引履歴",        use_container_width=True)
-        st.page_link("pages/5_⚙️_settings.py",   label="⚙️ 設定",            use_container_width=True)
+        st.page_link("pages/5_🎮_simulation.py",  label="🎮 シミュレーション", use_container_width=True)

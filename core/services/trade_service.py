@@ -49,8 +49,19 @@ def _append_tag(existing: str | None, new_tag: str) -> str:
 class TradeService:
     """売買ロジックを担当するサービス。"""
 
-    def __init__(self) -> None:
+    def __init__(self, account_type: str = "real") -> None:
         self._price_service = PriceService()
+        self._account_type = account_type
+
+    def _get_account(self, session, user_id: int):
+        from config.settings import settings as _s
+        repo = AccountRepo(session)
+        if self._account_type == "simulation":
+            return repo.get_or_create_simulation_account(user_id, _s.INITIAL_CASH)
+        account = repo.get_main_account(user_id)
+        if account is None:
+            raise RuntimeError("口座が見つかりません")
+        return account
 
     def buy(
         self,
@@ -102,7 +113,7 @@ class TradeService:
             position_repo = PositionRepo(session)
             tx_repo = TransactionRepo(session)
 
-            account = account_repo.get_main_account(user_id)
+            account = self._get_account(session, user_id)
             if account is None:
                 raise StockNotFoundError("口座が見つかりません")
 
@@ -216,7 +227,7 @@ class TradeService:
             position_repo = PositionRepo(session)
             tx_repo = TransactionRepo(session)
 
-            account = account_repo.get_main_account(user_id)
+            account = self._get_account(session, user_id)
             if account is None:
                 raise StockNotFoundError("口座が見つかりません")
 

@@ -12,6 +12,7 @@ class Account(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False, default="メイン口座")
+    account_type: Mapped[str] = mapped_column(String, nullable=False, default="real")
     initial_cash: Mapped[float] = mapped_column(Float, nullable=False)
     current_cash: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

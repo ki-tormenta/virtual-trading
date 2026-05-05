@@ -20,9 +20,31 @@ class AccountRepo:
         return list(self._session.execute(stmt).scalars())
 
     def get_main_account(self, user_id: int) -> Account | None:
-        """ユーザーの最初の口座（メイン口座）を取得する。"""
-        stmt = select(Account).where(Account.user_id == user_id).limit(1)
+        """ユーザーのメイン口座（account_type='real'）を取得する。"""
+        stmt = select(Account).where(
+            Account.user_id == user_id,
+            Account.account_type == "real",
+        ).limit(1)
         return self._session.execute(stmt).scalar_one_or_none()
+
+    def get_or_create_simulation_account(self, user_id: int, initial_cash: float) -> Account:
+        """シミュレーション口座を取得する。存在しない場合は作成する。"""
+        stmt = select(Account).where(
+            Account.user_id == user_id,
+            Account.account_type == "simulation",
+        ).limit(1)
+        account = self._session.execute(stmt).scalar_one_or_none()
+        if account is None:
+            account = Account(
+                user_id=user_id,
+                name="シミュレーション口座",
+                account_type="simulation",
+                initial_cash=initial_cash,
+                current_cash=initial_cash,
+            )
+            self._session.add(account)
+            self._session.flush()
+        return account
 
     def update_cash(self, account_id: int, new_cash: float) -> None:
         """口座の現金残高を更新する。"""

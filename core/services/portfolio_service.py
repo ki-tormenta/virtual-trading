@@ -78,15 +78,24 @@ class SnapshotRecord:
 class PortfolioService:
     """損益計算・スナップショット管理を担当するサービス。"""
 
-    def __init__(self) -> None:
+    def __init__(self, account_type: str = "real") -> None:
         self._price_service = PriceService()
+        self._account_type = account_type
+
+    def _get_account(self, session):
+        from config.settings import settings as _s
+        user_id = get_current_user_id()
+        repo = AccountRepo(session)
+        if self._account_type == "simulation":
+            return repo.get_or_create_simulation_account(user_id, _s.INITIAL_CASH)
+        return repo.get_main_account(user_id)
 
     def get_summary(self) -> PortfolioSummary:
         """ポートフォリオのサマリーを計算して返す。"""
         user_id = get_current_user_id()
 
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 raise RuntimeError("口座が見つかりません")
             tx_repo = TransactionRepo(session)
@@ -143,7 +152,7 @@ class PortfolioService:
         user_id = get_current_user_id()
 
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 return []
             positions = PositionRepo(session).get_all_by_account(user_id, account.id)
@@ -196,7 +205,7 @@ class PortfolioService:
         """取引履歴を返す。"""
         user_id = get_current_user_id()
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 return []
             txs = TransactionRepo(session).get_by_account(
@@ -238,7 +247,7 @@ class PortfolioService:
         """スナップショット履歴を返す。"""
         user_id = get_current_user_id()
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 return []
             snapshots = SnapshotRepo(session).get_history(
@@ -260,7 +269,7 @@ class PortfolioService:
         """全取引で使用されたタグを昇順で返す。"""
         user_id = get_current_user_id()
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 return []
             return TransactionRepo(session).get_all_tags(user_id, account.id)
@@ -269,7 +278,7 @@ class PortfolioService:
         """指定タグが付いた取引のティッカー集合を返す。"""
         user_id = get_current_user_id()
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 return set()
             return TransactionRepo(session).get_tickers_with_tag(user_id, account.id, tag)
@@ -286,7 +295,7 @@ class PortfolioService:
 
         user_id = get_current_user_id()
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 return
             session.execute(sa_delete(Transaction).where(Transaction.account_id == account.id))
@@ -335,7 +344,7 @@ class PortfolioService:
         user_id = get_current_user_id()
 
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 return
             latest = SnapshotRepo(session).get_latest(user_id, account.id)
@@ -362,7 +371,7 @@ class PortfolioService:
         user_id = get_current_user_id()
 
         with SessionLocal() as session:
-            account = AccountRepo(session).get_main_account(user_id)
+            account = self._get_account(session)
             if account is None:
                 return
             txs = TransactionRepo(session).get_by_account(

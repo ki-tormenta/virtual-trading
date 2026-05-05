@@ -176,6 +176,7 @@ if not st.session_state.snapshot_taken:
         from core.services.portfolio_service import PortfolioService
 
         PortfolioService().take_snapshot()
+        PortfolioService(account_type="simulation").take_snapshot()
     except Exception:
         pass
     st.session_state.snapshot_taken = True
@@ -184,9 +185,10 @@ st.title(f"{settings.APP_ICON} {settings.APP_TITLE}")
 
 col1, col2 = st.columns(2)
 with col1:
-    st.page_link("pages/1_📊_dashboard.py", label="📊 ダッシュボード", use_container_width=True)
-    st.page_link("pages/3_📋_positions.py", label="📋 ポジション",     use_container_width=True)
-    st.page_link("pages/5_⚙️_settings.py",  label="⚙️ 設定",           use_container_width=True)
+    st.page_link("pages/1_📊_dashboard.py",  label="📊 ダッシュボード",  use_container_width=True)
+    st.page_link("pages/3_📋_positions.py",  label="📋 ポジション",      use_container_width=True)
+    st.page_link("pages/6_⚙️_settings.py",  label="⚙️ 設定",            use_container_width=True)
 with col2:
-    st.page_link("pages/2_🔍_trade.py",     label="🔍 売買",            use_container_width=True)
-    st.page_link("pages/4_📜_history.py",   label="📜 取引履歴",        use_container_width=True)
+    st.page_link("pages/2_🔍_trade.py",      label="🔍 売買",            use_container_width=True)
+    st.page_link("pages/4_📜_history.py",    label="📜 取引履歴",        use_container_width=True)
+    st.page_link("pages/5_🎮_simulation.py", label="🎮 シミュレーション", use_container_width=True)
