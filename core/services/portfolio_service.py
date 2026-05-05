@@ -1,7 +1,7 @@
 import csv
 import io
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from core.auth import get_current_user_id
 from core.models.position import Position
@@ -318,29 +318,109 @@ class PortfolioService:
             ])
         return output.getvalue()
 
-    def take_snapshot(self, snapshot_date: date | None = None) -> DailySnapshot:
-        """当日の資産スナップショットを作成・更新する。"""
+    _MAX_BACKFILL_DAYS = 30
+
+    def take_snapshot(self, snapshot_date: date | None = None) -> None:
+        """スナップショットを作成する。前回から今日まで欠けた日をバックフィルする。
+
+        最大 _MAX_BACKFILL_DAYS 日分まで遡って補完する。
+        """
         if snapshot_date is None:
             snapshot_date = date.today()
 
         user_id = get_current_user_id()
-        summary = self.get_summary()
 
         with SessionLocal() as session:
             account = AccountRepo(session).get_main_account(user_id)
             if account is None:
-                raise RuntimeError("口座が見つかりません")
-            snapshot = DailySnapshot(
+                return
+            latest = SnapshotRepo(session).get_latest(user_id, account.id)
+
+        fill_from = (latest.date + timedelta(days=1)) if latest else snapshot_date
+        dates_to_fill: list[date] = []
+        d = fill_from
+        while d <= snapshot_date:
+            dates_to_fill.append(d)
+            d += timedelta(days=1)
+
+        # 上限を超えた場合は直近 _MAX_BACKFILL_DAYS 日だけ処理
+        if len(dates_to_fill) > self._MAX_BACKFILL_DAYS:
+            dates_to_fill = dates_to_fill[-self._MAX_BACKFILL_DAYS:]
+
+        for fill_date in dates_to_fill:
+            try:
+                self._take_snapshot_at(fill_date)
+            except Exception:
+                pass  # 1日失敗しても残りの日を続ける
+
+    def _take_snapshot_at(self, snap_date: date) -> None:
+        """指定日時点の取引履歴からポートフォリオ状態を再構築してスナップショットを保存する。"""
+        user_id = get_current_user_id()
+
+        with SessionLocal() as session:
+            account = AccountRepo(session).get_main_account(user_id)
+            if account is None:
+                return
+            txs = TransactionRepo(session).get_by_account(
+                user_id, account.id, to_date=snap_date
+            )
+            initial_cash = account.initial_cash
+
+        # 現金残高を再構築
+        cash = initial_cash
+        for tx in txs:
+            if tx.type == "BUY":
+                cash -= tx.total_amount + (tx.fee or 0.0)
+            else:
+                cash += tx.total_amount - (tx.fee or 0.0) - (tx.tax or 0.0)
+
+        # ポジションを再構築（ticker → (quantity, avg_price)）
+        positions: dict[str, tuple[int, float]] = {}
+        for tx in sorted(txs, key=lambda x: (x.transaction_date, x.created_at)):
+            if tx.type == "BUY":
+                if tx.ticker in positions:
+                    qty, avg = positions[tx.ticker]
+                    new_qty = qty + tx.quantity
+                    positions[tx.ticker] = (new_qty, (qty * avg + tx.quantity * tx.price) / new_qty)
+                else:
+                    positions[tx.ticker] = (tx.quantity, tx.price)
+            else:
+                qty, avg = positions.get(tx.ticker, (0, 0.0))
+                new_qty = qty - tx.quantity
+                if new_qty <= 0:
+                    positions.pop(tx.ticker, None)
+                else:
+                    positions[tx.ticker] = (new_qty, avg)
+
+        # 評価額を計算
+        has_us = any(not t.endswith(".T") for t in positions)
+        usd_jpy = self._price_service.get_usd_jpy_rate() if has_us else 1.0
+
+        jp_market_value = 0.0
+        us_market_value = 0.0
+        for ticker, (quantity, _) in positions.items():
+            try:
+                price = self._price_service.get_close_price(ticker, snap_date)
+                value = price * quantity
+                if ticker.endswith(".T"):
+                    jp_market_value += value
+                else:
+                    us_market_value += value * usd_jpy
+            except Exception:
+                pass
+
+        market_value = jp_market_value + us_market_value
+
+        with SessionLocal() as session:
+            snap = DailySnapshot(
                 user_id=user_id,
                 account_id=account.id,
-                date=snapshot_date,
-                cash=summary.current_cash,
-                market_value=summary.market_value,
-                total_assets=summary.total_assets,
-                jp_market_value=summary.jp_market_value,
-                us_market_value=summary.us_market_value,
+                date=snap_date,
+                cash=cash,
+                market_value=market_value,
+                total_assets=cash + market_value,
+                jp_market_value=jp_market_value,
+                us_market_value=us_market_value,
             )
-            result = SnapshotRepo(session).upsert(snapshot)
+            SnapshotRepo(session).upsert(snap)
             session.commit()
-            session.refresh(result)
-            return result
