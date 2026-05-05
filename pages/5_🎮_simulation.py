@@ -84,6 +84,30 @@ if not selected_scenario:
 psvc = PortfolioService(account_type=_SIM, scenario_name=selected_scenario)
 
 with st.expander("⚙️ シナリオ操作", expanded=False):
+    # ── リネーム ──
+    with st.form("sim_rename_form"):
+        new_name_input = st.text_input(
+            "シナリオ名を変更",
+            value=selected_scenario,
+            max_chars=20,
+        )
+        if st.form_submit_button("名前を変更", width="stretch"):
+            new_name = new_name_input.strip()
+            if not new_name:
+                st.error("名前を入力してください")
+            elif new_name == selected_scenario:
+                st.info("変更がありません")
+            else:
+                try:
+                    psvc_base.rename_simulation_scenario(selected_scenario, new_name)
+                    st.success(f"「{new_name}」に変更しました")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+
+    st.divider()
+
+    # ── リセット ──
     st.warning(f"「{selected_scenario}」の全取引・ポジション・スナップショットを削除して初期状態に戻します。")
     if st.button("🔄 このシナリオをリセット", type="primary"):
         st.session_state.sim_confirm_reset = selected_scenario

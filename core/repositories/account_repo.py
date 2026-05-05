@@ -79,6 +79,17 @@ class AccountRepo:
         self._session.flush()
         return account
 
+    def rename_simulation_account(self, user_id: int, old_name: str, new_name: str) -> None:
+        """シミュレーション口座の名前を変更する。"""
+        stmt = select(Account).where(
+            Account.user_id == user_id,
+            Account.account_type == "simulation",
+            Account.name == old_name,
+        ).limit(1)
+        account = self._session.execute(stmt).scalar_one_or_none()
+        if account is not None:
+            account.name = new_name
+
     def update_cash(self, account_id: int, new_cash: float) -> None:
         """口座の現金残高を更新する。"""
         account = self._session.get(Account, account_id)

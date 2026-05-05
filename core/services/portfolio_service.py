@@ -312,6 +312,20 @@ class PortfolioService:
             )
             session.commit()
 
+    def rename_simulation_scenario(self, old_name: str, new_name: str) -> None:
+        """シミュレーションシナリオの名前を変更する。
+
+        Raises:
+            ValueError: 新しい名前がすでに存在する場合
+        """
+        user_id = get_current_user_id()
+        with SessionLocal() as session:
+            existing = [a.name for a in AccountRepo(session).get_simulation_accounts(user_id)]
+            if new_name in existing:
+                raise ValueError(f"「{new_name}」はすでに存在します")
+            AccountRepo(session).rename_simulation_account(user_id, old_name, new_name)
+            session.commit()
+
     def take_all_simulation_snapshots(self) -> None:
         """全シミュレーションシナリオのスナップショットを取得する。"""
         user_id = get_current_user_id()
