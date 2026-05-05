@@ -14,6 +14,13 @@ class StockRepo:
         """tickerで銘柄を取得する。"""
         return self._session.get(Stock, ticker)
 
+    def get_by_tickers(self, tickers: list[str]) -> list[Stock]:
+        """複数tickerを1クエリで一括取得する。"""
+        if not tickers:
+            return []
+        stmt = select(Stock).where(Stock.ticker.in_(tickers))
+        return list(self._session.execute(stmt).scalars())
+
     def get_by_code(self, code: str) -> Stock | None:
         """証券コードで銘柄を取得する。"""
         stmt = select(Stock).where(Stock.code == code)

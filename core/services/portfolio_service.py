@@ -147,9 +147,11 @@ class PortfolioService:
             if account is None:
                 return []
             positions = PositionRepo(session).get_all_by_account(user_id, account.id)
+            tickers = [pos.ticker for pos in positions]
+            stock_map = {s.ticker: s for s in StockRepo(session).get_by_tickers(tickers)}
             pos_data = []
             for pos in positions:
-                stock = StockRepo(session).get_by_ticker(pos.ticker)
+                stock = stock_map.get(pos.ticker)
                 pos_data.append((
                     pos.ticker,
                     stock.name if stock else pos.ticker,

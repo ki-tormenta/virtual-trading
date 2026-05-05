@@ -14,17 +14,15 @@ st.title("📜 取引履歴")
 
 try:
     # フィルタ
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        type_filter = st.selectbox("種別", ["全て", "買付（BUY）", "売却（SELL）"])
-    with col2:
-        ticker_input = st.text_input("銘柄コード", placeholder="例: 7203 / AAPL")
-    with col3:
-        tag_input = st.text_input("タグ", placeholder="例: 成長株")
-    with col4:
-        from_date = st.date_input("開始日", value=date.today() - timedelta(days=90))
-    with col5:
-        to_date = st.date_input("終了日", value=date.today())
+    with st.expander("🔍 フィルタ", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            type_filter = st.selectbox("種別", ["全て", "買付（BUY）", "売却（SELL）"])
+            ticker_input = st.text_input("銘柄コード", placeholder="例: 7203 / AAPL")
+            tag_input = st.text_input("タグ", placeholder="例: 成長株")
+        with col2:
+            from_date = st.date_input("開始日", value=date.today() - timedelta(days=90))
+            to_date = st.date_input("終了日", value=date.today())
 
     trade_type: str | None = None
     if type_filter == "買付（BUY）":

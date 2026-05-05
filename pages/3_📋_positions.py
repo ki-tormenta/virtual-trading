@@ -46,39 +46,42 @@ try:
 
             st.divider()
 
-            # テーブル
-            rows = []
+            view = st.radio(
+                "表示モード",
+                ["シンプル", "詳細"],
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+
+            rows_simple = []
+            rows_detail = []
             for p in filtered:
                 is_jp = p.market == "JP"
                 currency = "円" if is_jp else "USD"
-                rows.append({
+                pnl_str = (
+                    f"{p.unrealized_pnl:+,.0f}{currency}"
+                    if is_jp
+                    else f"${p.unrealized_pnl:+,.2f}"
+                )
+                rows_simple.append({
+                    "銘柄名": p.name,
+                    "評価額(円)": f"{p.market_value_jpy:,.0f}円",
+                    "含み損益(円)": f"{p.unrealized_pnl_jpy:+,.0f}円",
+                    "損益率": f"{p.unrealized_pnl_rate:+.2f}%",
+                })
+                rows_detail.append({
                     "銘柄名": p.name,
                     "ティッカー": p.ticker,
-                    "市場": "JP" if p.market == "JP" else "US",
+                    "市場": p.market,
                     "数量": f"{p.quantity:,d}株",
-                    "平均取得単価": (
-                        f"{p.avg_buy_price:,.0f}{currency}"
-                        if is_jp
-                        else f"${p.avg_buy_price:,.2f}"
-                    ),
-                    "現在値": (
-                        f"{p.current_price:,.0f}{currency}"
-                        if is_jp
-                        else f"${p.current_price:,.2f}"
-                    ),
-                    "評価額": (
-                        f"{p.market_value:,.0f}{currency}"
-                        if is_jp
-                        else f"${p.market_value:,.2f}"
-                    ),
-                    "含み損益": (
-                        f"{p.unrealized_pnl:+,.0f}{currency}"
-                        if is_jp
-                        else f"${p.unrealized_pnl:+,.2f}"
-                    ),
+                    "平均取得単価": f"{p.avg_buy_price:,.0f}{currency}" if is_jp else f"${p.avg_buy_price:,.2f}",
+                    "現在値": f"{p.current_price:,.0f}{currency}" if is_jp else f"${p.current_price:,.2f}",
+                    "評価額": f"{p.market_value:,.0f}{currency}" if is_jp else f"${p.market_value:,.2f}",
+                    "含み損益": pnl_str,
                     "損益率": f"{p.unrealized_pnl_rate:+.2f}%",
                 })
 
+            rows = rows_simple if view == "シンプル" else rows_detail
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True, hide_index=True)
 

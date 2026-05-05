@@ -61,8 +61,17 @@ if st.session_state.trade_ticker:
         st.subheader(f"{st.session_state.trade_stock_name}（{ticker}）")
         st.metric("終値", fmt_price(current_price))
 
-        # 株価チャート（過去1年）
-        df = price_svc.get_price_history(ticker, period="1y")
+        # 株価チャート（期間選択）
+        _PERIODS = {"1週間": "5d", "1ヶ月": "1mo", "3ヶ月": "3mo", "1年": "1y", "3年": "3y"}
+        period_label = st.radio(
+            "期間",
+            list(_PERIODS.keys()),
+            index=3,
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        period = _PERIODS[period_label]
+        df = price_svc.get_price_history(ticker, period=period)
         fig = go.Figure(
             go.Scatter(
                 x=df.index,
@@ -72,7 +81,7 @@ if st.session_state.trade_ticker:
             )
         )
         fig.update_layout(
-            title="株価チャート（過去1年・終値）",
+            title=f"株価チャート（{period_label}・終値）",
             xaxis_title="日付",
             yaxis_title=f"終値（{currency}）",
             height=360,
