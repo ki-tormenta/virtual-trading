@@ -55,17 +55,20 @@ class PriceService:
         except Exception:
             return 150.0
 
-    def get_price_history(self, ticker: str, period: str = "1y") -> pd.DataFrame:
+    def get_price_history(
+        self, ticker: str, period: str = "1y", include_ohlcv: bool = False
+    ) -> pd.DataFrame:
         """株価履歴DataFrameを取得する。
 
         Args:
             ticker: 銘柄ティッカー
             period: 取得期間 (例: '1mo', '3mo', '6mo', '1y', '2y', 'max')
+            include_ohlcv: TrueのときOpen/High/Low/Close全列を返す
 
         Returns:
-            日付インデックス、'Close'列を含むDataFrame
+            日付インデックスのDataFrame（Close列を必ず含む）
         """
-        return self._source.get_price_history(ticker, period)
+        return self._source.get_price_history(ticker, period, include_ohlcv=include_ohlcv)
 
     def get_or_register_stock(self, ticker: str) -> Stock:
         """銘柄をDBから取得する。未登録の場合はyfinanceから情報を取得してDBに登録する。

@@ -6,7 +6,7 @@ import streamlit as st
 
 from config.settings import settings
 from config.ui_theme import (
-    inject_styles, kpi_card, kpi_row, rank_row, bottom_nav,
+    inject_styles, inject_animations, kpi_card, kpi_row, rank_row, bottom_nav,
     COLOR_PROFIT, COLOR_LOSS, COLOR_NEUTRAL,
     COLOR_CASH, COLOR_JP, COLOR_US,
     PLOTLY_FONT, PLOTLY_BG, PLOTLY_GRID, PLOTLY_TICK_COLOR,
@@ -17,9 +17,9 @@ from core.services.price_service import PriceService
 
 _BENCHMARKS: dict[str, str] = {
     "日経225": "^N225",
-    "TOPIX": "^TOPX",
+    "TOPIX":   "^TOPX",
     "S&P 500": "^GSPC",
-    "NASDAQ": "^IXIC",
+    "NASDAQ":  "^IXIC",
 }
 _BENCHMARK_COLORS = ["#f5a623", "#7ed321", "#bd10e0", "#4a90e2"]
 
@@ -148,7 +148,7 @@ def _render_stock_cards(held_tickers: set[str], held_name_map: dict[str, str]) -
                 is_jp = ticker.endswith(".T")
                 price_str = f"¥{curr:,.0f}" if is_jp else f"${curr:.2f}"
                 color = COLOR_PROFIT if chg_pct >= 0 else COLOR_LOSS
-                fill = "rgba(0,212,170,.07)" if chg_pct >= 0 else "rgba(255,71,87,.07)"
+                fill_col = "rgba(0,212,170,.07)" if chg_pct >= 0 else "rgba(255,71,87,.07)"
                 chg_cls = "sc-chg-up" if chg_pct >= 0 else "sc-chg-dn"
                 arrow = "▲" if chg_pct >= 0 else "▼"
                 badge = '<span class="sc-badge">HELD</span>' if is_held else ""
@@ -170,7 +170,7 @@ def _render_stock_cards(held_tickers: set[str], held_name_map: dict[str, str]) -
                     x=hist.index, y=closes,
                     mode="lines",
                     line=dict(color=color, width=1.5),
-                    fill="tozeroy", fillcolor=fill,
+                    fill="tozeroy", fillcolor=fill_col,
                     hovertemplate=f"%{{x|%Y-%m-%d}}<br>{y_fmt}<extra></extra>",
                 ))
                 fig.update_layout(
@@ -195,16 +195,17 @@ def _render_stock_cards(held_tickers: set[str], held_name_map: dict[str, str]) -
 
 inject_styles()
 require_auth()
+inject_animations()
 st.title("📊 Dashboard")
 
 try:
-    psvc    = PortfolioService()
-    summary = psvc.get_summary()
+    psvc      = PortfolioService()
+    summary   = psvc.get_summary()
     positions = psvc.get_positions()
 
-    held_tickers = {p.ticker for p in positions}
-    held_name_map = {p.ticker: p.name for p in positions}
-    all_tickers = tuple(dict.fromkeys(list(held_tickers) + list(_FAMOUS.keys())))
+    held_tickers   = {p.ticker for p in positions}
+    held_name_map  = {p.ticker: p.name for p in positions}
+    all_tickers    = tuple(dict.fromkeys(list(held_tickers) + list(_FAMOUS.keys())))
 
     # ── Ticker bar ───────────────────────────────────────────────────────────
     _render_ticker(all_tickers)
@@ -222,7 +223,7 @@ try:
             f"¥{summary.realized_pnl:+,.0f}",
             positive=summary.realized_pnl >= 0 if summary.realized_pnl != 0 else None,
         ),
-        kpi_card("Total Fees", f"¥{summary.total_fee:,.0f}", small=False),
+        kpi_card("Total Fees", f"¥{summary.total_fee:,.0f}"),
         kpi_card(
             "Total P&L",
             f"¥{summary.total_pnl:+,.0f}",
@@ -242,12 +243,14 @@ try:
             "1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "All": "max",
         }
         selected_period = st.radio(
-            "Period", list(_period_map.keys()), horizontal=True, index=4, label_visibility="collapsed"
+            "Period", list(_period_map.keys()), horizontal=True, index=4,
+            label_visibility="collapsed",
         )
         _days = _period_map[selected_period]
         _period_map_str = _yf_period_map[selected_period]
         _from = date.today() - timedelta(days=_days) if _days else None
         snapshots = psvc.get_snapshot_history(from_date=_from)
+
         if len(snapshots) >= 2:
             dates  = [s.date for s in snapshots]
             totals = [s.total_assets for s in snapshots]
@@ -280,27 +283,125 @@ try:
 
     with col_right:
         if summary.total_assets > 0:
-            labels = ["Cash", "JP Stocks", "US Stocks"]
-            values = [summary.current_cash, summary.jp_market_value, summary.us_market_value]
-            fig2 = go.Figure(go.Pie(
-                labels=labels, values=values,
-                hole=0.6,
-                marker=dict(
-                    colors=[COLOR_CASH, COLOR_JP, COLOR_US],
-                    line=dict(color="#070b14", width=2),
-                ),
-                textinfo="label+percent",
-                textfont=dict(size=12, color="#c8d0e0"),
-                hovertemplate="%{label}<br>¥%{value:,.0f}<br>%{percent}<extra></extra>",
+            # ── Sunburst allocation chart ─────────────────────────────────
+            labels_sb: list[str] = ["Portfolio"]
+            parents_sb: list[str] = [""]
+            values_sb: list[float] = [summary.total_assets]
+            colors_sb: list[str] = ["rgba(0,0,0,0)"]
+
+            def _sb(label: str, parent: str, value: float, color: str) -> None:
+                labels_sb.append(label)
+                parents_sb.append(parent)
+                values_sb.append(value)
+                colors_sb.append(color)
+
+            if summary.current_cash > 0:
+                _sb("Cash", "Portfolio", summary.current_cash, COLOR_CASH)
+            if summary.jp_market_value > 0:
+                _sb("Japan", "Portfolio", summary.jp_market_value, COLOR_JP)
+                for p in (p for p in positions if p.market == "JP"):
+                    nm = (p.name[:11] + "…") if len(p.name) > 12 else p.name
+                    _sb(nm, "Japan", p.market_value_jpy, "rgba(0,212,170,0.5)")
+            if summary.us_market_value > 0:
+                _sb("US", "Portfolio", summary.us_market_value, COLOR_US)
+                for p in (p for p in positions if p.market == "US"):
+                    nm = (p.name[:11] + "…") if len(p.name) > 12 else p.name
+                    _sb(nm, "US", p.market_value_jpy, "rgba(66,153,225,0.5)")
+
+            fig2 = go.Figure(go.Sunburst(
+                labels=labels_sb, parents=parents_sb, values=values_sb,
+                branchvalues="total",
+                marker=dict(colors=colors_sb, line=dict(color="#070b14", width=1.5)),
+                hovertemplate="%{label}<br>¥%{value:,.0f}<br>%{percentParent:.1%}<extra></extra>",
+                textfont=dict(size=11, color="#e8edf8"),
+                insidetextorientation="radial",
             ))
             fig2.update_layout(
                 title=dict(text="Allocation", font=dict(size=13, color="#c8d0e0")),
                 height=300,
                 font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
                 margin=dict(l=0, r=0, t=40, b=0),
-                paper_bgcolor=PLOTLY_BG, showlegend=False,
+                paper_bgcolor=PLOTLY_BG,
             )
             st.plotly_chart(fig2, use_container_width=True,
+                            config={"displayModeBar": False})
+
+    # ── Daily P&L Calendar ───────────────────────────────────────────────────
+    all_snaps = psvc.get_snapshot_history()
+    if len(all_snaps) >= 2:
+        pnl_map: dict[date, float] = {}
+        for i in range(1, len(all_snaps)):
+            d = all_snaps[i].date
+            pnl_map[d] = all_snaps[i].total_assets - all_snaps[i - 1].total_assets
+
+        if pnl_map:
+            today = date.today()
+            cal_start = today - timedelta(weeks=52)
+            cal_start -= timedelta(days=cal_start.weekday())  # align to Monday
+
+            days: list[date] = []
+            d = cal_start
+            while d <= today:
+                days.append(d)
+                d += timedelta(days=1)
+
+            n_weeks = (len(days) + 6) // 7
+            z: list[list] = [[None] * n_weeks for _ in range(7)]
+            hover: list[list[str]] = [[""] * n_weeks for _ in range(7)]
+
+            for i, day in enumerate(days):
+                row = day.weekday()
+                col = i // 7
+                if col >= n_weeks:
+                    continue
+                pnl = pnl_map.get(day)
+                if pnl is not None:
+                    z[row][col] = pnl
+                    arrow = "▲" if pnl >= 0 else "▼"
+                    hover[row][col] = f"{day.strftime('%Y-%m-%d')}<br>{arrow} ¥{pnl:+,.0f}"
+                else:
+                    z[row][col] = 0
+                    hover[row][col] = day.strftime("%Y-%m-%d")
+
+            # Month labels on x-axis
+            x_labels: list[str] = []
+            for col in range(n_weeks):
+                idx = col * 7
+                d_lbl = days[idx] if idx < len(days) else days[-1]
+                x_labels.append(d_lbl.strftime("%b") if d_lbl.day <= 7 else "")
+
+            flat = [v for row in z for v in row if v is not None and v != 0]
+            max_abs = max((abs(v) for v in flat), default=1) or 1
+
+            fig_cal = go.Figure(go.Heatmap(
+                z=z,
+                x=x_labels,
+                y=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                text=hover,
+                colorscale=[
+                    [0.00, "#ff4757"],
+                    [0.42, "#1a2333"],
+                    [0.50, "#1e2840"],
+                    [0.58, "#1a2333"],
+                    [1.00, "#00d4aa"],
+                ],
+                zmin=-max_abs, zmax=max_abs,
+                hovertemplate="%{text}<extra></extra>",
+                showscale=False,
+                xgap=3, ygap=3,
+            ))
+            fig_cal.update_layout(
+                title=dict(text="Daily P&L Calendar", font=dict(size=13, color="#c8d0e0")),
+                height=195,
+                font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
+                margin=dict(l=38, r=0, t=40, b=0),
+                paper_bgcolor=PLOTLY_BG,
+                plot_bgcolor=PLOTLY_BG,
+                xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=10)),
+                yaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=10),
+                           autorange="reversed"),
+            )
+            st.plotly_chart(fig_cal, use_container_width=True,
                             config={"displayModeBar": False})
 
     # ── Stock charts ─────────────────────────────────────────────────────────
@@ -427,7 +528,9 @@ try:
         else:
             sim_data: list[tuple[str, list]] = []
             for name in scenarios:
-                snaps = PortfolioService(account_type="simulation", scenario_name=name).get_snapshot_history(from_date=_from)
+                snaps = PortfolioService(
+                    account_type="simulation", scenario_name=name
+                ).get_snapshot_history(from_date=_from)
                 if len(snaps) >= 2:
                     sim_data.append((name, snaps))
 
@@ -451,7 +554,8 @@ try:
                         hovertemplate=f"<b>%{{x}}</b><br>{name}: %{{y:.1f}}<extra></extra>",
                     ))
                 fig_sim.update_layout(
-                    title=dict(text="Portfolio vs Simulation (base = 100)", font=dict(size=13, color="#c8d0e0")),
+                    title=dict(text="Portfolio vs Simulation (base = 100)",
+                               font=dict(size=13, color="#c8d0e0")),
                     height=300,
                     font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
                     margin=dict(l=0, r=0, t=40, b=0),
@@ -468,7 +572,9 @@ try:
                 cards = [("Real", summary.total_assets, summary.total_pnl_rate)]
                 for name in scenarios:
                     try:
-                        s = PortfolioService(account_type="simulation", scenario_name=name).get_summary()
+                        s = PortfolioService(
+                            account_type="simulation", scenario_name=name
+                        ).get_summary()
                         cards.append((name, s.total_assets, s.total_pnl_rate))
                     except Exception:
                         pass

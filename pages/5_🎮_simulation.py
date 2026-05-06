@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from config.ui_theme import inject_styles, bottom_nav, COLOR_PROFIT, PLOTLY_FONT, PLOTLY_BG
+from config.ui_theme import inject_styles, bottom_nav, COLOR_PROFIT, COLOR_LOSS, PLOTLY_FONT, PLOTLY_BG, PLOTLY_GRID, PLOTLY_TICK_COLOR
 from core.auth import require_auth
 from core.exceptions import (
     InsufficientFundsError,
@@ -175,19 +175,59 @@ with tab_trade:
                 "Period", list(_PERIODS.keys()), index=3, horizontal=True,
                 label_visibility="collapsed", key=f"sim_period_{sim_key}",
             )
-            df_chart = price_svc.get_price_history(ticker, period=_PERIODS[period_label])
-            fig = go.Figure(go.Scatter(
-                x=df_chart.index, y=df_chart["Close"], mode="lines",
-                line=dict(color=COLOR_PROFIT, width=1.5),
-            ))
+            df_chart = price_svc.get_price_history(
+                ticker, period=_PERIODS[period_label], include_ohlcv=True
+            )
+            fig = go.Figure()
+            if all(c in df_chart.columns for c in ["Open", "High", "Low", "Close"]):
+                fig.add_trace(go.Candlestick(
+                    x=df_chart.index,
+                    open=df_chart["Open"], high=df_chart["High"],
+                    low=df_chart["Low"], close=df_chart["Close"],
+                    name="Price",
+                    increasing=dict(line=dict(color=COLOR_PROFIT, width=1),
+                                    fillcolor="rgba(0,212,170,0.25)"),
+                    decreasing=dict(line=dict(color=COLOR_LOSS, width=1),
+                                    fillcolor="rgba(255,71,87,0.25)"),
+                    showlegend=False,
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=df_chart.index, y=df_chart["Close"], mode="lines",
+                    line=dict(color=COLOR_PROFIT, width=1.5),
+                ))
+            close_s = df_chart["Close"]
+            if len(close_s) >= 25:
+                fig.add_trace(go.Scatter(
+                    x=df_chart.index, y=close_s.rolling(25).mean(),
+                    mode="lines", name="MA25",
+                    line=dict(color="#4299e1", width=1.2, dash="dot"),
+                ))
+            if len(close_s) >= 75:
+                fig.add_trace(go.Scatter(
+                    x=df_chart.index, y=close_s.rolling(75).mean(),
+                    mode="lines", name="MA75",
+                    line=dict(color="#f6c90e", width=1.2, dash="dot"),
+                ))
+            tick_pfx = "¥" if is_jp else "$"
             fig.update_layout(
-                title=f"Price Chart ({period_label} · Close)",
-                xaxis_title="Date", yaxis_title=f"Close ({currency})",
-                height=280, font=dict(family=PLOTLY_FONT),
+                title=f"Price Chart ({period_label} · OHLC)",
+                xaxis_title="Date", yaxis_title=f"Price ({currency})",
+                height=300,
+                font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
                 margin=dict(l=0, r=0, t=40, b=0),
                 plot_bgcolor=PLOTLY_BG, paper_bgcolor=PLOTLY_BG,
+                xaxis=dict(showgrid=True, gridcolor=PLOTLY_GRID,
+                           rangeslider=dict(visible=False),
+                           showline=False, zeroline=False),
+                yaxis=dict(showgrid=True, gridcolor=PLOTLY_GRID,
+                           showline=False, zeroline=False, tickprefix=tick_pfx),
+                legend=dict(orientation="h", y=-0.14, font=dict(size=10)),
+                hovermode="x unified",
+                dragmode="pan",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"scrollZoom": True, "displayModeBar": False})
 
             buy_tab, sell_tab = st.tabs(["📈 Buy", "📉 Sell"])
 

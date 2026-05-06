@@ -292,13 +292,93 @@ hr {
   padding: 0.25rem;
 }
 [data-testid="stCaptionContainer"] { color: var(--c-text3) !important; }
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.main .block-container { animation: fadeSlideUp 0.35s ease both; }
+.kpi-card { animation: fadeSlideUp 0.55s cubic-bezier(.22,.68,0,1.2) both; }
+.kpi-card:nth-child(1) { animation-delay: .04s; }
+.kpi-card:nth-child(2) { animation-delay: .10s; }
+.kpi-card:nth-child(3) { animation-delay: .16s; }
+.kpi-card:nth-child(4) { animation-delay: .22s; }
+.kpi-card:nth-child(5) { animation-delay: .28s; }
 </style>
+"""
+
+
+# JS: count-up animation + cache countdown bar (injected via components.html → window.parent)
+_ANIM_JS = r"""
+<script>
+(function() {
+  var doc = window.parent.document, win = window.parent;
+  // ── Count-up ─────────────────────────────────────────────────────────────
+  var DUR = 900;
+  function ani(el) {
+    var t = el.innerText.trim();
+    var m = t.match(/^([¥$]?)([+\-]?)([\d,]+)(\.\d+)?(%?)$/);
+    if (!m) return;
+    var pre=m[1], sg=m[2], dec=m[4]||'', pct=m[5];
+    var tgt = Math.abs(parseFloat(sg + m[3].replace(/,/g,'') + dec));
+    var dp = dec ? dec.length-1 : 0;
+    var t0 = win.performance.now();
+    (function tick(now) {
+      var p = Math.min((now-t0)/DUR, 1);
+      var e = p<1 ? 1-Math.pow(2,-10*p) : 1;
+      var v = (tgt*e).toFixed(dp).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      el.innerText = pre+sg+v+pct;
+      if (p<1) win.requestAnimationFrame(tick);
+    })(win.performance.now());
+  }
+  var seen = new WeakSet();
+  function scan() {
+    doc.querySelectorAll('.kpi-value').forEach(function(el) {
+      if (!seen.has(el)) { seen.add(el); ani(el); }
+    });
+  }
+  new MutationObserver(scan).observe(doc.body, { childList:true, subtree:true });
+  scan();
+
+  // ── Cache countdown bar ───────────────────────────────────────────────────
+  if (doc.getElementById('vt-cb')) return;
+  var TTL = 300, t0c = Date.now();
+  var wrap = doc.createElement('div'); wrap.id = 'vt-cb';
+  wrap.style.cssText = 'position:fixed;top:0;left:0;right:0;height:2px;z-index:99999;pointer-events:none;';
+  var fill = doc.createElement('div'); fill.id = 'vt-cf';
+  fill.style.cssText = 'height:100%;width:0%;background:linear-gradient(90deg,#00d4aa,#4299e1);transition:width 1s linear;';
+  wrap.appendChild(fill); doc.body.appendChild(wrap);
+  var lbl = doc.createElement('div'); lbl.id = 'vt-cl';
+  lbl.style.cssText = 'position:fixed;bottom:8px;right:14px;font-size:9px;color:#3d4f63;z-index:99999;pointer-events:none;font-family:monospace;letter-spacing:.04em;';
+  doc.body.appendChild(lbl);
+  function upd() {
+    var el = (Date.now()-t0c)/1000, p = Math.min(el/TTL*100, 100);
+    var f = doc.getElementById('vt-cf'), l = doc.getElementById('vt-cl');
+    if (!f||!l) return;
+    f.style.width = p + '%';
+    if (p >= 100) {
+      f.style.background = '#ff4757'; l.textContent = '⟳ data may be stale'; l.style.color = '#ff4757';
+    } else {
+      var r = TTL-el;
+      l.textContent = 'cache ' + Math.floor(r/60) + ':' + ('0'+Math.floor(r%60)).slice(-2);
+    }
+  }
+  setInterval(upd, 1000); upd();
+})();
+</script>
 """
 
 
 def inject_styles() -> None:
     """全ページ共通のカスタムCSSを注入する。"""
     st.markdown(_CSS, unsafe_allow_html=True)
+
+
+def inject_animations() -> None:
+    """カウントアップ + キャッシュカウントダウンバーのJSを注入する（ダッシュボード用）。"""
+    import streamlit.components.v1 as components
+    components.html(_ANIM_JS, height=0, scrolling=False)
 
 
 def kpi_card(

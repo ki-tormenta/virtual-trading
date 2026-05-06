@@ -54,15 +54,18 @@ class YfinanceSource(PriceDataSource):
 
         return self._with_retry(_fetch, ticker)
 
-    def get_price_history(self, ticker: str, period: str = "1y") -> pd.DataFrame:
+    def get_price_history(
+        self, ticker: str, period: str = "1y", include_ohlcv: bool = False
+    ) -> pd.DataFrame:
         """株価履歴を取得する。
 
         Args:
             ticker: 銘柄ティッカー
             period: 取得期間 (例: '1mo', '3mo', '6mo', '1y', '2y', 'max')
+            include_ohlcv: TrueのときOpen/High/Low/Close全列を返す
 
         Returns:
-            日付インデックス、'Close'列を含むDataFrame
+            日付インデックスのDataFrame（Close列を必ず含む）
 
         Raises:
             StockNotFoundError: 銘柄が見つからない場合
@@ -73,7 +76,11 @@ class YfinanceSource(PriceDataSource):
             df = yf.Ticker(ticker).history(period=period)
             if df.empty:
                 raise StockNotFoundError(f"価格データが見つかりません: {ticker}")
-            return self._normalize_index(df)[["Close"]].copy()
+            df = self._normalize_index(df)
+            if include_ohlcv:
+                cols = [c for c in ["Open", "High", "Low", "Close"] if c in df.columns]
+                return df[cols].copy()
+            return df[["Close"]].copy()
 
         return self._with_retry(_fetch, ticker)
 
