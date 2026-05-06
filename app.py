@@ -123,17 +123,17 @@ def _show_login_page() -> None:
             )
 
             st.link_button(
-                "🔐  Google でログイン",
+                "🔐  Sign in with Google",
                 oauth_resp.url,
                 width="stretch",
             )
             st.caption(
-                "<div style='text-align:center'>招待されたアカウントでのみ利用できます</div>",
+                "<div style='text-align:center'>Invite-only access</div>",
                 unsafe_allow_html=True,
             )
 
         except Exception as e:
-            st.error(f"ログインページの初期化に失敗しました: {e}")
+            st.error(f"Login page error: {e}")
 
 
 # ── ログアウト（サイドバー） ──────────────────────────────────────────────────
@@ -142,8 +142,8 @@ def _render_sidebar_logout() -> None:
     with st.sidebar:
         email = st.session_state.get("user_email", "")
         if email:
-            st.caption(f"ログイン中: {email}")
-        if st.button("ログアウト", width="stretch"):
+            st.caption(f"Signed in: {email}")
+        if st.button("Logout", width="stretch"):
             st.session_state.clear()
             st.rerun()
 
@@ -185,10 +185,10 @@ st.title(f"{settings.APP_ICON} {settings.APP_TITLE}")
 
 col1, col2 = st.columns(2)
 with col1:
-    st.page_link("pages/1_📊_dashboard.py",  label="📊 ダッシュボード",  use_container_width=True)
-    st.page_link("pages/3_📋_positions.py",  label="📋 ポジション",      use_container_width=True)
-    st.page_link("pages/6_⚙️_settings.py",  label="⚙️ 設定",            use_container_width=True)
+    st.page_link("pages/1_📊_dashboard.py",  label="📊 Dashboard",  use_container_width=True)
+    st.page_link("pages/3_📋_positions.py",  label="📋 Positions",  use_container_width=True)
+    st.page_link("pages/6_⚙️_settings.py",  label="⚙️ Settings",   use_container_width=True)
 with col2:
-    st.page_link("pages/2_🔍_trade.py",      label="🔍 売買",            use_container_width=True)
-    st.page_link("pages/4_📜_history.py",    label="📜 取引履歴",        use_container_width=True)
-    st.page_link("pages/5_🎮_simulation.py", label="🎮 シミュレーション", use_container_width=True)
+    st.page_link("pages/2_🔍_trade.py",      label="🔍 Trade",      use_container_width=True)
+    st.page_link("pages/4_📜_history.py",    label="📜 History",    use_container_width=True)
+    st.page_link("pages/5_🎮_simulation.py", label="🎮 Simulation", use_container_width=True)

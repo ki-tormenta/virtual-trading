@@ -151,7 +151,7 @@ def _render_stock_cards(held_tickers: set[str], held_name_map: dict[str, str]) -
                 fill = "rgba(0,212,170,.07)" if chg_pct >= 0 else "rgba(255,71,87,.07)"
                 chg_cls = "sc-chg-up" if chg_pct >= 0 else "sc-chg-dn"
                 arrow = "▲" if chg_pct >= 0 else "▼"
-                badge = '<span class="sc-badge">保有</span>' if is_held else ""
+                badge = '<span class="sc-badge">HELD</span>' if is_held else ""
 
                 st.markdown(
                     f'<div class="stock-card">'
@@ -160,7 +160,7 @@ def _render_stock_cards(held_tickers: set[str], held_name_map: dict[str, str]) -
                     f'<div class="sc-ticker">{ticker.replace(".T","")}</div></div>'
                     f'{badge}</div>'
                     f'<div class="sc-price">{price_str}</div>'
-                    f'<div class="{chg_cls}">{arrow} {abs(chg_pct):.2f}%（1年）</div>'
+                    f'<div class="{chg_cls}">{arrow} {abs(chg_pct):.2f}% (1Y)</div>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
@@ -195,7 +195,7 @@ def _render_stock_cards(held_tickers: set[str], held_name_map: dict[str, str]) -
 
 inject_styles()
 require_auth()
-st.title("📊 ダッシュボード")
+st.title("📊 Dashboard")
 
 try:
     psvc    = PortfolioService()
@@ -206,43 +206,43 @@ try:
     held_name_map = {p.ticker: p.name for p in positions}
     all_tickers = tuple(dict.fromkeys(list(held_tickers) + list(_FAMOUS.keys())))
 
-    # ── ティッカーバー ────────────────────────────────────────────────────────
+    # ── Ticker bar ───────────────────────────────────────────────────────────
     _render_ticker(all_tickers)
 
-    # ── KPI カード ────────────────────────────────────────────────────────────
+    # ── KPI cards ────────────────────────────────────────────────────────────
     kpi_row([
-        kpi_card("総資産", f"¥{summary.total_assets:,.0f}"),
         kpi_card(
-            "含み損益",
+            "Unrealized P&L",
             f"¥{summary.unrealized_pnl:+,.0f}",
             delta=f"{summary.unrealized_pnl / summary.initial_cash * 100:+.2f}% of initial",
             positive=summary.unrealized_pnl >= 0,
         ),
         kpi_card(
-            "実現損益（累計）",
+            "Realized P&L",
             f"¥{summary.realized_pnl:+,.0f}",
             positive=summary.realized_pnl >= 0 if summary.realized_pnl != 0 else None,
         ),
+        kpi_card("Total Fees", f"¥{summary.total_fee:,.0f}", small=False),
         kpi_card(
-            "総合損益",
+            "Total P&L",
             f"¥{summary.total_pnl:+,.0f}",
             delta=f"{summary.total_pnl_rate:+.2f}%",
             positive=summary.total_pnl >= 0,
         ),
     ])
 
-    # ── 資産推移 + ポートフォリオ構成 ─────────────────────────────────────────
+    # ── Portfolio value + Allocation ─────────────────────────────────────────
     col_left, col_right = st.columns([3, 2])
 
     with col_left:
         _period_map: dict[str, int | None] = {
-            "1ヶ月": 30, "3ヶ月": 90, "6ヶ月": 180, "1年": 365, "全期間": None,
+            "1M": 30, "3M": 90, "6M": 180, "1Y": 365, "All": None,
         }
         _yf_period_map: dict[str, str] = {
-            "1ヶ月": "1mo", "3ヶ月": "3mo", "6ヶ月": "6mo", "1年": "1y", "全期間": "max",
+            "1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "All": "max",
         }
         selected_period = st.radio(
-            "期間", list(_period_map.keys()), horizontal=True, index=4, label_visibility="collapsed"
+            "Period", list(_period_map.keys()), horizontal=True, index=4, label_visibility="collapsed"
         )
         _days = _period_map[selected_period]
         _period_map_str = _yf_period_map[selected_period]
@@ -260,7 +260,7 @@ try:
                 hovertemplate="<b>%{x}</b><br>¥%{y:,.0f}<extra></extra>",
             ))
             fig.update_layout(
-                title=dict(text="資産推移", font=dict(size=13, color="#c8d0e0")),
+                title=dict(text="Portfolio Value", font=dict(size=13, color="#c8d0e0")),
                 height=300,
                 font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
                 margin=dict(l=0, r=0, t=40, b=0),
@@ -276,11 +276,11 @@ try:
             st.plotly_chart(fig, use_container_width=True,
                             config={"scrollZoom": True, "displayModeBar": False})
         else:
-            st.info("資産推移グラフは2日分以上のスナップショットが揃うと表示されます。")
+            st.info("Portfolio chart will appear after 2+ daily snapshots.")
 
     with col_right:
         if summary.total_assets > 0:
-            labels = ["現金", "日本株", "米国株"]
+            labels = ["Cash", "JP Stocks", "US Stocks"]
             values = [summary.current_cash, summary.jp_market_value, summary.us_market_value]
             fig2 = go.Figure(go.Pie(
                 labels=labels, values=values,
@@ -294,7 +294,7 @@ try:
                 hovertemplate="%{label}<br>¥%{value:,.0f}<br>%{percent}<extra></extra>",
             ))
             fig2.update_layout(
-                title=dict(text="ポートフォリオ構成", font=dict(size=13, color="#c8d0e0")),
+                title=dict(text="Allocation", font=dict(size=13, color="#c8d0e0")),
                 height=300,
                 font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
                 margin=dict(l=0, r=0, t=40, b=0),
@@ -303,28 +303,28 @@ try:
             st.plotly_chart(fig2, use_container_width=True,
                             config={"displayModeBar": False})
 
-    # ── 銘柄チャート ──────────────────────────────────────────────────────────
+    # ── Stock charts ─────────────────────────────────────────────────────────
     st.divider()
     st.markdown(
         "<p style='font-size:.7rem;font-weight:700;text-transform:uppercase;"
-        "letter-spacing:.1em;color:#8892a4;margin-bottom:1rem'>📊 銘柄チャート"
+        "letter-spacing:.1em;color:#8892a4;margin-bottom:1rem'>📊 Stock Charts"
         "<span style='font-size:.65rem;color:#3d4f63;margin-left:8px'>"
-        "スクロールでズーム・ドラッグでパン</span></p>",
+        "scroll to zoom · drag to pan</span></p>",
         unsafe_allow_html=True,
     )
     _render_stock_cards(held_tickers, held_name_map)
 
-    # ── 市場別内訳 ────────────────────────────────────────────────────────────
+    # ── Breakdown ────────────────────────────────────────────────────────────
     st.divider()
     kpi_row([
-        kpi_card("現金残高", f"¥{summary.current_cash:,.0f}", small=True),
-        kpi_card("日本株評価額（円）", f"¥{summary.jp_market_value:,.0f}", small=True),
-        kpi_card("米国株評価額（円換算）", f"¥{summary.us_market_value:,.0f}", small=True),
-        kpi_card("累計手数料", f"¥{summary.total_fee:,.0f}", small=True),
-        kpi_card("累計税金", f"¥{summary.total_tax:,.0f}", small=True),
+        kpi_card("Total Assets", f"¥{summary.total_assets:,.0f}", small=True),
+        kpi_card("Cash", f"¥{summary.current_cash:,.0f}", small=True),
+        kpi_card("JP Stocks", f"¥{summary.jp_market_value:,.0f}", small=True),
+        kpi_card("US Stocks", f"¥{summary.us_market_value:,.0f}", small=True),
+        kpi_card("Total Tax", f"¥{summary.total_tax:,.0f}", small=True),
     ])
 
-    # ── 銘柄ランキング ────────────────────────────────────────────────────────
+    # ── Rankings ─────────────────────────────────────────────────────────────
     if positions:
         st.divider()
         sorted_pos = sorted(positions, key=lambda p: p.unrealized_pnl_rate, reverse=True)
@@ -332,7 +332,7 @@ try:
         with col_top:
             st.markdown(
                 "<p style='font-size:.7rem;font-weight:700;text-transform:uppercase;"
-                "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>値上がり Top3</p>",
+                "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>Top Gainers</p>",
                 unsafe_allow_html=True,
             )
             st.markdown(
@@ -342,7 +342,7 @@ try:
         with col_bottom:
             st.markdown(
                 "<p style='font-size:.7rem;font-weight:700;text-transform:uppercase;"
-                "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>値下がり Bottom3</p>",
+                "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>Top Losers</p>",
                 unsafe_allow_html=True,
             )
             st.markdown(
@@ -350,11 +350,11 @@ try:
                 unsafe_allow_html=True,
             )
 
-    # ── ベンチマーク比較 ──────────────────────────────────────────────────────
+    # ── Benchmark ────────────────────────────────────────────────────────────
     st.divider()
     st.markdown(
         "<p style='font-size:.7rem;font-weight:700;text-transform:uppercase;"
-        "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>ベンチマーク比較</p>",
+        "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>Benchmark</p>",
         unsafe_allow_html=True,
     )
     bm_cols = st.columns(len(_BENCHMARKS))
@@ -372,9 +372,9 @@ try:
 
         fig_bm = go.Figure()
         fig_bm.add_trace(go.Scatter(
-            x=snap_dates, y=port_norm, mode="lines", name="ポートフォリオ",
+            x=snap_dates, y=port_norm, mode="lines", name="Portfolio",
             line=dict(color=COLOR_PROFIT, width=2.5),
-            hovertemplate="<b>%{x}</b><br>ポートフォリオ: %{y:.1f}<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>Portfolio: %{y:.1f}<extra></extra>",
         ))
         price_svc = PriceService()
         for (bm_label, bm_ticker), bm_color in zip(selected_bms, _BENCHMARK_COLORS):
@@ -393,10 +393,10 @@ try:
                     hovertemplate=f"<b>%{{x}}</b><br>{bm_label}: %{{y:.1f}}<extra></extra>",
                 ))
             except Exception:
-                st.caption(f"⚠️ {bm_label} のデータ取得に失敗しました")
+                st.caption(f"⚠️ Failed to load {bm_label}")
 
         fig_bm.update_layout(
-            title=dict(text="パフォーマンス比較（開始時 = 100）", font=dict(size=13, color="#c8d0e0")),
+            title=dict(text="Performance (base = 100)", font=dict(size=13, color="#c8d0e0")),
             height=320,
             font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
             margin=dict(l=0, r=0, t=40, b=0),
@@ -410,20 +410,20 @@ try:
         st.plotly_chart(fig_bm, use_container_width=True,
                         config={"scrollZoom": True, "displayModeBar": False})
     elif selected_bms:
-        st.info("スナップショットが2日分以上揃うとベンチマーク比較グラフが表示されます。")
+        st.info("Benchmark chart will appear after 2+ daily snapshots.")
 
-    # ── シミュレーション比較 ──────────────────────────────────────────────────
+    # ── Simulation comparison ────────────────────────────────────────────────
     st.divider()
     st.markdown(
         "<p style='font-size:.7rem;font-weight:700;text-transform:uppercase;"
-        "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>🎮 vs シミュレーション</p>",
+        "letter-spacing:.1em;color:#8892a4;margin-bottom:.6rem'>🎮 vs Simulation</p>",
         unsafe_allow_html=True,
     )
     _SIM_COLORS = ["#f5a623", "#bd10e0", "#4a90e2", "#ff4757"]
     try:
         scenarios = psvc.get_simulation_scenarios()
         if not scenarios:
-            st.info("シミュレーションシナリオがまだありません。🎮 シミュレーションページで作成してください。")
+            st.info("No simulation scenarios yet. Create one in 🎮 Simulation.")
         else:
             sim_data: list[tuple[str, list]] = []
             for name in scenarios:
@@ -437,9 +437,9 @@ try:
                 fig_sim.add_trace(go.Scatter(
                     x=[s.date for s in snapshots],
                     y=[s.total_assets / real_base * 100 for s in snapshots],
-                    mode="lines", name="実口座",
+                    mode="lines", name="Real",
                     line=dict(color=COLOR_PROFIT, width=2.5),
-                    hovertemplate="<b>%{x}</b><br>実口座: %{y:.1f}<extra></extra>",
+                    hovertemplate="<b>%{x}</b><br>Real: %{y:.1f}<extra></extra>",
                 ))
                 for (name, snaps), color in zip(sim_data, _SIM_COLORS):
                     sim_base = snaps[0].total_assets
@@ -451,7 +451,7 @@ try:
                         hovertemplate=f"<b>%{{x}}</b><br>{name}: %{{y:.1f}}<extra></extra>",
                     ))
                 fig_sim.update_layout(
-                    title=dict(text="資産推移比較（開始時 = 100）", font=dict(size=13, color="#c8d0e0")),
+                    title=dict(text="Portfolio vs Simulation (base = 100)", font=dict(size=13, color="#c8d0e0")),
                     height=300,
                     font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
                     margin=dict(l=0, r=0, t=40, b=0),
@@ -465,7 +465,7 @@ try:
                 st.plotly_chart(fig_sim, use_container_width=True,
                                 config={"scrollZoom": True, "displayModeBar": False})
 
-                cards = [("実口座", summary.total_assets, summary.total_pnl_rate)]
+                cards = [("Real", summary.total_assets, summary.total_pnl_rate)]
                 for name in scenarios:
                     try:
                         s = PortfolioService(account_type="simulation", scenario_name=name).get_summary()
@@ -476,12 +476,12 @@ try:
                 for col, (label, assets, rate) in zip(sim_cols, cards):
                     col.metric(label, f"¥{assets:,.0f}", delta=f"{rate:+.2f}%")
             else:
-                st.info("シナリオのスナップショットが2日分以上揃うと比較グラフが表示されます。")
+                st.info("Simulation chart will appear after 2+ daily snapshots.")
     except Exception:
-        st.info("シミュレーションシナリオがまだありません。🎮 シミュレーションページで作成してください。")
+        st.info("No simulation scenarios yet. Create one in 🎮 Simulation.")
 
 except Exception as e:
-    st.error(f"データ取得エラー: {e}")
+    st.error(f"Error: {e}")
     if settings.SKIP_AUTH:
         import traceback
         st.code(traceback.format_exc())

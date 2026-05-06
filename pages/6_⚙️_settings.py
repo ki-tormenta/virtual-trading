@@ -6,40 +6,38 @@ from core.services.portfolio_service import PortfolioService
 
 inject_styles()
 require_auth()
-st.title("⚙️ 設定")
+st.title("⚙️ Settings")
 
 psvc = PortfolioService()
 
-# ── CSV エクスポート ────────────────────────────────────────────────────────
-st.subheader("データエクスポート")
-st.caption("全取引履歴を CSV ファイルでダウンロードします。")
+st.subheader("Data Export")
+st.caption("Download all transaction history as a CSV file.")
 
-if st.button("CSV を生成"):
+if st.button("Generate CSV"):
     csv_data = psvc.export_transactions_csv()
     st.download_button(
-        label="💾 transactions.csv をダウンロード",
-        data=csv_data.encode("utf-8-sig"),  # BOM 付きで Excel でも文字化けしない
+        label="💾 Download transactions.csv",
+        data=csv_data.encode("utf-8-sig"),
         file_name="transactions.csv",
         mime="text/csv",
     )
 
 st.divider()
 
-# ── ポートフォリオリセット ────────────────────────────────────────────────
-st.subheader("ポートフォリオリセット")
+st.subheader("Portfolio Reset")
 st.warning(
-    "全取引履歴・ポジション・スナップショットを削除し、現金残高を初期値（1,000万円）に戻します。"
-    "この操作は取り消せません。"
+    "Deletes all trades, positions, and snapshots and resets your cash to the initial value (¥10,000,000). "
+    "This cannot be undone."
 )
 
 confirm = st.text_input(
-    "確認のため「RESET」と入力してください",
+    "Type RESET to confirm",
     placeholder="RESET",
 )
 
-if st.button("リセットを実行", disabled=(confirm != "RESET"), type="primary"):
+if st.button("Execute Reset", disabled=(confirm != "RESET"), type="primary"):
     psvc.reset_portfolio()
-    st.success("リセットが完了しました。現金残高を初期値に戻しました。")
+    st.success("Reset complete. Cash balance restored to initial value.")
     st.rerun()
 
 bottom_nav()

@@ -7,25 +7,25 @@ from core.services.portfolio_service import PortfolioService
 
 inject_styles()
 require_auth()
-st.title("📋 ポジション一覧")
+st.title("📋 Positions")
 
 try:
-    with st.spinner("データを取得中..."):
+    with st.spinner("Loading..."):
         positions = PortfolioService().get_positions()
 
     if not positions:
-        st.info("保有銘柄はありません。売買ページから銘柄を購入してください。")
+        st.info("No positions. Buy stocks from the Trade page.")
     else:
         col_mf, col_tf = st.columns([2, 3])
         with col_mf:
-            market_filter = st.selectbox("市場フィルタ", ["全て", "日本株（JP）", "米国株（US）"])
+            market_filter = st.selectbox("Market", ["All", "Japan (JP)", "US (US)"])
         with col_tf:
-            tag_filter = st.text_input("タグフィルタ", placeholder="例: 成長株")
+            tag_filter = st.text_input("Tag Filter", placeholder="e.g. growth")
 
         filtered = positions
-        if market_filter == "日本株（JP）":
+        if market_filter == "Japan (JP)":
             filtered = [p for p in filtered if p.market == "JP"]
-        elif market_filter == "米国株（US）":
+        elif market_filter == "US (US)":
             filtered = [p for p in filtered if p.market == "US"]
 
         if tag_filter.strip():
@@ -34,21 +34,20 @@ try:
             filtered = [p for p in filtered if p.ticker in tagged]
 
         if not filtered:
-            st.info("該当する保有銘柄はありません。")
+            st.info("No matching positions.")
         else:
-            # サマリー（全て円換算）
             total_value_jpy = sum(p.market_value_jpy for p in filtered)
             total_pnl_jpy = sum(p.unrealized_pnl_jpy for p in filtered)
             c1, c2, c3 = st.columns(3)
-            c1.metric("銘柄数", f"{len(filtered)}銘柄")
-            c2.metric("評価額合計（円換算）", f"{total_value_jpy:,.0f}円")
-            c3.metric("含み損益合計（円換算）", f"{total_pnl_jpy:+,.0f}円")
+            c1.metric("# Holdings", f"{len(filtered)}")
+            c2.metric("Total Value (JPY)", f"{total_value_jpy:,.0f}¥")
+            c3.metric("Total Unrealized P&L (JPY)", f"{total_pnl_jpy:+,.0f}¥")
 
             st.divider()
 
             view = st.radio(
-                "表示モード",
-                ["シンプル", "詳細"],
+                "View Mode",
+                ["Simple", "Detail"],
                 horizontal=True,
                 label_visibility="collapsed",
             )
@@ -57,35 +56,35 @@ try:
             rows_detail = []
             for p in filtered:
                 is_jp = p.market == "JP"
-                currency = "円" if is_jp else "USD"
+                currency = "¥" if is_jp else "USD"
                 pnl_str = (
-                    f"{p.unrealized_pnl:+,.0f}{currency}"
+                    f"{p.unrealized_pnl:+,.0f}¥"
                     if is_jp
                     else f"${p.unrealized_pnl:+,.2f}"
                 )
                 rows_simple.append({
-                    "銘柄名": p.name,
-                    "評価額(円)": f"{p.market_value_jpy:,.0f}円",
-                    "含み損益(円)": f"{p.unrealized_pnl_jpy:+,.0f}円",
-                    "損益率": f"{p.unrealized_pnl_rate:+.2f}%",
+                    "Name": p.name,
+                    "Value (JPY)": f"{p.market_value_jpy:,.0f}¥",
+                    "Unrealized P&L (JPY)": f"{p.unrealized_pnl_jpy:+,.0f}¥",
+                    "P&L %": f"{p.unrealized_pnl_rate:+.2f}%",
                 })
                 rows_detail.append({
-                    "銘柄名": p.name,
-                    "ティッカー": p.ticker,
-                    "市場": p.market,
-                    "数量": f"{p.quantity:,d}株",
-                    "平均取得単価": f"{p.avg_buy_price:,.0f}{currency}" if is_jp else f"${p.avg_buy_price:,.2f}",
-                    "現在値": f"{p.current_price:,.0f}{currency}" if is_jp else f"${p.current_price:,.2f}",
-                    "評価額": f"{p.market_value:,.0f}{currency}" if is_jp else f"${p.market_value:,.2f}",
-                    "含み損益": pnl_str,
-                    "損益率": f"{p.unrealized_pnl_rate:+.2f}%",
+                    "Name": p.name,
+                    "Ticker": p.ticker,
+                    "Market": p.market,
+                    "Qty": f"{p.quantity:,d} shares",
+                    "Avg. Cost": f"{p.avg_buy_price:,.0f}¥" if is_jp else f"${p.avg_buy_price:,.2f}",
+                    "Current Price": f"{p.current_price:,.0f}¥" if is_jp else f"${p.current_price:,.2f}",
+                    "Value": f"{p.market_value:,.0f}¥" if is_jp else f"${p.market_value:,.2f}",
+                    "Unrealized P&L": pnl_str,
+                    "P&L %": f"{p.unrealized_pnl_rate:+.2f}%",
                 })
 
-            rows = rows_simple if view == "シンプル" else rows_detail
+            rows = rows_simple if view == "Simple" else rows_detail
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True, hide_index=True)
 
 except Exception as e:
-    st.error(f"データ取得エラー: {e}")
+    st.error(f"Data fetch error: {e}")
 
 bottom_nav()
