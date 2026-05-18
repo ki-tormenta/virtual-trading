@@ -17,16 +17,37 @@ inject_styles()
 require_auth()
 st.title("🔍 Trade")
 
-try:
-    _cash = PortfolioService().get_summary().current_cash
-    st.metric("Available Cash", f"¥{_cash:,.0f}")
-except Exception:
-    pass
-
 if "trade_ticker" not in st.session_state:
     st.session_state.trade_ticker = None
 if "trade_stock_name" not in st.session_state:
     st.session_state.trade_stock_name = None
+
+# ── 残り資金 + クイック選択 ──────────────────────────────────────────────────
+try:
+    _psvc = PortfolioService()
+    _cash = _psvc.get_summary().current_cash
+    _held_tickers = {p.ticker for p in _psvc.get_positions()}
+    _traded = _psvc.get_traded_stocks()
+
+    st.metric("Available Cash", f"¥{_cash:,.0f}")
+
+    if _traded:
+        # 保有中を先頭に、過去取引を後ろに並べる
+        _held_list = [(t, n) for t, n in _traded if t in _held_tickers]
+        _past_list = [(t, n) for t, n in _traded if t not in _held_tickers]
+        _display = _held_list + _past_list
+
+        st.caption("📌 Held / Recent")
+        _ncols = min(len(_display), 6)
+        _btn_cols = st.columns(_ncols)
+        for i, (_t, _name) in enumerate(_display[:6]):
+            _label = f"🔴 {_t}" if _t in _held_tickers else _t
+            if _btn_cols[i].button(_label, key=f"qs_{_t}", help=_name, use_container_width=True):
+                st.session_state.trade_ticker = _t
+                st.session_state.trade_stock_name = _name
+                st.rerun()
+except Exception:
+    pass
 
 col1, col2 = st.columns([4, 1])
 with col1:

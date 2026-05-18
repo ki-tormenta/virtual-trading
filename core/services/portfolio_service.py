@@ -270,6 +270,21 @@ class PortfolioService:
                 for s in snapshots
             ]
 
+    def get_traded_stocks(self) -> list[tuple[str, str]]:
+        """取引履歴のある銘柄を最終取引日順で返す（ticker, name）。
+
+        Returns:
+            (ticker, 銘柄名) のリスト。最近取引した順。
+        """
+        user_id = get_current_user_id()
+        with SessionLocal() as session:
+            account = self._get_account(session)
+            if account is None:
+                return []
+            tickers = TransactionRepo(session).get_distinct_tickers(user_id, account.id)
+            stock_map = {s.ticker: s.name for s in StockRepo(session).get_by_tickers(tickers)}
+        return [(t, stock_map.get(t, t)) for t in tickers]
+
     def get_all_tags(self) -> list[str]:
         """全取引で使用されたタグを昇順で返す。"""
         user_id = get_current_user_id()

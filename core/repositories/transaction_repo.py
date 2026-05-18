@@ -84,6 +84,18 @@ class TransactionRepo:
             if tags_str and tag in [t.strip() for t in tags_str.split(",")]
         }
 
+    def get_distinct_tickers(self, user_id: int, account_id: int) -> list[str]:
+        """取引のあるティッカーを最終取引日の新しい順で返す。"""
+        from sqlalchemy import func
+
+        stmt = (
+            select(Transaction.ticker, func.max(Transaction.transaction_date).label("last_date"))
+            .where(Transaction.user_id == user_id, Transaction.account_id == account_id)
+            .group_by(Transaction.ticker)
+            .order_by(func.max(Transaction.transaction_date).desc())
+        )
+        return [row[0] for row in self._session.execute(stmt).all()]
+
     def get_realized_pnl_sum(self, user_id: int, account_id: int) -> float:
         """実現損益の累計を返す。"""
         from sqlalchemy import func
