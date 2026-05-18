@@ -335,6 +335,24 @@ try:
             st.plotly_chart(fig2, use_container_width=True,
                             config={"displayModeBar": False})
 
+            fig3 = go.Figure(go.Sunburst(
+                labels=labels_sb, parents=parents_sb, values=values_sb,
+                branchvalues="total",
+                marker=dict(colors=colors_sb, line=dict(color="#070b14", width=1.5)),
+                hovertemplate="%{label}<br>¥%{value:,.0f}<br>%{percentParent:.1%}<extra></extra>",
+                textfont=dict(size=11, color="#e8edf8"),
+                insidetextorientation="radial",
+            ))
+            fig3.update_layout(
+                title=dict(text="Allocation (Sunburst)", font=dict(size=13, color="#c8d0e0")),
+                height=300,
+                font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
+                margin=dict(l=0, r=0, t=40, b=0),
+                paper_bgcolor=PLOTLY_BG,
+            )
+            st.plotly_chart(fig3, use_container_width=True,
+                            config={"displayModeBar": False})
+
     # ── Daily P&L Calendar ───────────────────────────────────────────────────
     all_snaps = psvc.get_snapshot_history()
     if len(all_snaps) >= 2:
