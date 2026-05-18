@@ -313,16 +313,20 @@ try:
                     nm = (p.name[:11] + "…") if len(p.name) > 12 else p.name
                     _sb(nm, "US", p.market_value_jpy, "rgba(66,153,225,0.5)")
 
-            fig2 = go.Figure(go.Sunburst(
+            fig2 = go.Figure(go.Treemap(
                 labels=labels_sb, parents=parents_sb, values=values_sb,
                 branchvalues="total",
-                marker=dict(colors=colors_sb, line=dict(color="#070b14", width=1.5)),
-                hovertemplate="%{label}<br>¥%{value:,.0f}<br>%{percentParent:.1%}<extra></extra>",
+                marker=dict(
+                    colors=colors_sb,
+                    line=dict(color="#070b14", width=2),
+                    pad=dict(t=18, l=3, r=3, b=3),
+                ),
+                hovertemplate="<b>%{label}</b><br>¥%{value:,.0f}<br>%{percentParent:.1%}<extra></extra>",
                 textfont=dict(size=11, color="#e8edf8"),
-                insidetextorientation="radial",
+                textposition="middle center",
             ))
             fig2.update_layout(
-                title=dict(text="Allocation", font=dict(size=13, color="#c8d0e0")),
+                title=dict(text="Allocation  (click to zoom)", font=dict(size=13, color="#c8d0e0")),
                 height=300,
                 font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
                 margin=dict(l=0, r=0, t=40, b=0),

@@ -18,7 +18,7 @@ from core.services.trade_service import TradeService, normalize_ticker, _TAX_RAT
 
 inject_styles()
 require_auth()
-st.title("🎮 Simulation")
+st.title("🤖 AI Simulation")
 st.caption("Trade in a virtual account by scenario. Changes don't affect your real portfolio.")
 
 _MAX_SCENARIOS = 4

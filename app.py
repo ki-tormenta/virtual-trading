@@ -191,4 +191,4 @@ with col1:
 with col2:
     st.page_link("pages/2_🔍_trade.py",      label="🔍 Trade",      use_container_width=True)
     st.page_link("pages/4_📜_history.py",    label="📜 History",    use_container_width=True)
-    st.page_link("pages/5_🎮_simulation.py", label="🎮 Simulation", use_container_width=True)
+    st.page_link("pages/5_🤖_simulation.py", label="🤖 AI Simulation", use_container_width=True)
