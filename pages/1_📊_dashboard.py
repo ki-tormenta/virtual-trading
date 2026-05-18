@@ -223,6 +223,11 @@ try:
             f"¥{summary.realized_pnl:+,.0f}",
             positive=summary.realized_pnl >= 0 if summary.realized_pnl != 0 else None,
         ),
+        kpi_card(
+            "FX Gain/Loss",
+            f"¥{summary.fx_gain:+,.0f}",
+            positive=summary.fx_gain >= 0 if abs(summary.fx_gain) >= 1 else None,
+        ),
         kpi_card("Total Fees", f"¥{summary.total_fee:,.0f}"),
         kpi_card(
             "Total P&L",

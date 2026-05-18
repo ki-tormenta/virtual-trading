@@ -23,6 +23,7 @@ class PortfolioSummary:
     total_assets: float
     unrealized_pnl: float
     realized_pnl: float
+    fx_gain: float
     total_pnl: float
     total_pnl_rate: float
     initial_cash: float
@@ -133,6 +134,7 @@ class PortfolioService:
         total_assets = current_cash + market_value_jpy
         total_pnl = total_assets - initial_cash
         total_pnl_rate = total_pnl / initial_cash * 100 if initial_cash > 0 else 0.0
+        fx_gain = total_pnl - unrealized_pnl_jpy - realized_pnl
 
         return PortfolioSummary(
             current_cash=current_cash,
@@ -140,6 +142,7 @@ class PortfolioService:
             total_assets=total_assets,
             unrealized_pnl=unrealized_pnl_jpy,
             realized_pnl=realized_pnl,
+            fx_gain=fx_gain,
             total_pnl=total_pnl,
             total_pnl_rate=total_pnl_rate,
             initial_cash=initial_cash,

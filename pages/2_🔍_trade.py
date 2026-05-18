@@ -17,6 +17,12 @@ inject_styles()
 require_auth()
 st.title("🔍 Trade")
 
+try:
+    _cash = PortfolioService().get_summary().current_cash
+    st.metric("Available Cash", f"¥{_cash:,.0f}")
+except Exception:
+    pass
+
 if "trade_ticker" not in st.session_state:
     st.session_state.trade_ticker = None
 if "trade_stock_name" not in st.session_state:
