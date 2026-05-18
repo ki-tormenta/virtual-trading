@@ -8,6 +8,7 @@ from core.models.base import Base
 
 class Account(Base):
     __tablename__ = "accounts"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)

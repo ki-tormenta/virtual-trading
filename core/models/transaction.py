@@ -29,4 +29,5 @@ class Transaction(Base):
         CheckConstraint("type IN ('BUY', 'SELL')", name="chk_transaction_type"),
         Index("idx_transactions_user", "user_id"),
         Index("idx_transactions_account", "account_id"),
+        {"extend_existing": True},
     )

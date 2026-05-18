@@ -16,4 +16,4 @@ class Stock(Base):
     sector: Mapped[str | None] = mapped_column(String)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
-    __table_args__ = (Index("idx_stocks_code", "code"),)
+    __table_args__ = (Index("idx_stocks_code", "code"), {"extend_existing": True})

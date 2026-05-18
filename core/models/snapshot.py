@@ -8,6 +8,7 @@ from core.models.base import Base
 
 class DailySnapshot(Base):
     __tablename__ = "daily_snapshots"
+    __table_args__ = {"extend_existing": True}
 
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), primary_key=True)
     account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id"), primary_key=True)

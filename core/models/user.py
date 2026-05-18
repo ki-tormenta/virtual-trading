@@ -8,6 +8,7 @@ from core.models.base import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str | None] = mapped_column(String, unique=True)
