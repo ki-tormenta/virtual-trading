@@ -70,6 +70,19 @@ class PriceService:
         """
         return self._source.get_price_history(ticker, period, include_ohlcv=include_ohlcv)
 
+    def get_ticker_analytics(self, ticker: str) -> dict:
+        """β値・アナリスト目標株価・決算日・ニュースを一括取得する。
+
+        Args:
+            ticker: 銘柄ティッカー
+
+        Returns:
+            beta, target_mean_price, target_high_price, target_low_price,
+            next_earnings_date, currency, news を含む辞書。
+            取得失敗項目はキーが存在しないか None。
+        """
+        return self._source.get_ticker_analytics(ticker)
+
     def get_or_register_stock(self, ticker: str) -> Stock:
         """銘柄をDBから取得する。未登録の場合はyfinanceから情報を取得してDBに登録する。
 

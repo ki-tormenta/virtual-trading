@@ -84,6 +84,33 @@ class TransactionRepo:
             if tags_str and tag in [t.strip() for t in tags_str.split(",")]
         }
 
+    def get_first_buy_dates(self, user_id: int, account_id: int, tickers: list[str]) -> dict[str, date]:
+        """銘柄ごとの最初の買付日を返す。
+
+        Args:
+            user_id: ユーザーID
+            account_id: 口座ID
+            tickers: 対象ティッカーリスト
+
+        Returns:
+            {ticker: 最初の買付日} の辞書
+        """
+        from sqlalchemy import func
+
+        if not tickers:
+            return {}
+        stmt = (
+            select(Transaction.ticker, func.min(Transaction.transaction_date).label("first_date"))
+            .where(
+                Transaction.user_id == user_id,
+                Transaction.account_id == account_id,
+                Transaction.type == "BUY",
+                Transaction.ticker.in_(tickers),
+            )
+            .group_by(Transaction.ticker)
+        )
+        return {row[0]: row[1] for row in self._session.execute(stmt).all()}
+
     def get_distinct_tickers(self, user_id: int, account_id: int) -> list[str]:
         """取引のあるティッカーを最終取引日の新しい順で返す。"""
         from sqlalchemy import func

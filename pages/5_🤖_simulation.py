@@ -122,7 +122,36 @@ if st.session_state.get("sim_confirm_reset") == selected_scenario:
 
 st.divider()
 
-tab_trade, tab_positions, tab_history = st.tabs(["📈 Trade", "📋 Positions", "📜 History"])
+# USD/JPY rate — always visible regardless of active tab
+_usd_jpy_rate = PriceService().get_usd_jpy_rate()
+st.caption(f"💱 USD/JPY  **{_usd_jpy_rate:,.2f}**")
+
+tab_trade, tab_positions, tab_history, tab_analytics = st.tabs(
+    ["📈 Trade", "📋 Positions", "📜 History", "📊 Analytics"]
+)
+
+
+# ---------------------------------------------------------------------------
+# Cached helpers — yfinance external data, not DB data, so cache is appropriate
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_analytics(ticker: str) -> dict:
+    return PriceService().get_ticker_analytics(ticker)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_close_series(ticker: str) -> pd.Series | None:
+    try:
+        df = PriceService().get_price_history(ticker, period="1y")
+        return df["Close"]
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Tab: Trade
+# ---------------------------------------------------------------------------
 
 with tab_trade:
     sim_key = selected_scenario.replace(" ", "_")
@@ -296,14 +325,20 @@ with tab_trade:
         except (StockNotFoundError, PriceNotAvailableError) as e:
             st.error(f"Price fetch error: {e}")
 
+
+# ---------------------------------------------------------------------------
+# Tab: Positions
+# ---------------------------------------------------------------------------
+
 with tab_positions:
     try:
         sim_summary = psvc.get_summary()
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         c1.metric("Cash Balance", f"¥{sim_summary.current_cash:,.0f}")
         c2.metric("Total Value", f"¥{sim_summary.market_value:,.0f}")
         c3.metric("Total P&L", f"¥{sim_summary.total_pnl:+,.0f}",
                   delta=f"{sim_summary.total_pnl_rate:+.2f}%")
+        c4.metric("USD/JPY", f"{_usd_jpy_rate:,.2f}")
 
         positions = psvc.get_positions()
         if not positions:
@@ -312,20 +347,23 @@ with tab_positions:
             view = st.radio("View", ["Simple", "Detail"], horizontal=True,
                             label_visibility="collapsed", key="sim_pos_view")
             rows_s, rows_d = [], []
+            today = date.today()
             for p in positions:
                 is_jp_p = p.market == "JP"
-                cur = "¥" if is_jp_p else "USD"
                 rows_s.append({
                     "Name": p.name,
                     "Value (JPY)": f"{p.market_value_jpy:,.0f}¥",
                     "Unrealized P&L (JPY)": f"{p.unrealized_pnl_jpy:+,.0f}¥",
                     "P&L %": f"{p.unrealized_pnl_rate:+.2f}%",
                 })
+                days_held = (today - p.first_buy_date).days if p.first_buy_date else None
                 rows_d.append({
                     "Name": p.name,
                     "Ticker": p.ticker,
                     "Market": p.market,
                     "Qty": f"{p.quantity:,d} shares",
+                    "Since": p.first_buy_date.strftime("%Y-%m-%d") if p.first_buy_date else "N/A",
+                    "Days Held": f"{days_held}d" if days_held is not None else "N/A",
                     "Avg. Cost": f"{p.avg_buy_price:,.0f}¥" if is_jp_p else f"${p.avg_buy_price:,.2f}",
                     "Current Price": f"{p.current_price:,.0f}¥" if is_jp_p else f"${p.current_price:,.2f}",
                     "Unrealized P&L (JPY)": f"{p.unrealized_pnl_jpy:+,.0f}¥",
@@ -335,6 +373,11 @@ with tab_positions:
                          use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"Data fetch error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Tab: History
+# ---------------------------------------------------------------------------
 
 with tab_history:
     try:
@@ -380,5 +423,169 @@ with tab_history:
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"Data fetch error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Tab: Analytics
+# ---------------------------------------------------------------------------
+
+with tab_analytics:
+    try:
+        positions_all = psvc.get_positions()
+    except Exception as e:
+        st.error(f"Data fetch error: {e}")
+        positions_all = []
+
+    if not positions_all:
+        st.info("No positions to analyze. Add trades in the Trade tab.")
+    else:
+        tickers_held = [p.ticker for p in positions_all]
+        name_map = {p.ticker: p.name for p in positions_all}
+
+        # Fetch all analytics upfront (cached per ticker for 1h)
+        with st.spinner("Loading analytics data from market data provider..."):
+            analytics_map = {t: _fetch_analytics(t) for t in tickers_held}
+
+        # ----------------------------------------------------------------
+        # Section: Portfolio Risk
+        # ----------------------------------------------------------------
+        st.subheader("📊 Portfolio Risk")
+
+        col_sh, col_pad = st.columns([1, 3])
+        with col_sh:
+            sharpe = psvc.get_sharpe_ratio()
+            if sharpe is not None:
+                st.metric("Sharpe Ratio (annualized)", f"{sharpe:.2f}")
+            else:
+                st.metric("Sharpe Ratio", "N/A", help="Requires 10+ days of snapshot history")
+
+        if len(tickers_held) >= 2:
+            st.markdown("**Return Correlation (1Y)**")
+            price_frames: dict[str, pd.Series] = {}
+            for t in tickers_held:
+                series = _fetch_close_series(t)
+                if series is not None:
+                    price_frames[name_map.get(t, t)] = series.pct_change().dropna()
+
+            if len(price_frames) >= 2:
+                combined = pd.DataFrame(price_frames).dropna()
+                corr = combined.corr()
+
+                fig_corr = go.Figure(go.Heatmap(
+                    z=corr.values,
+                    x=corr.columns.tolist(),
+                    y=corr.index.tolist(),
+                    colorscale="RdBu_r",
+                    zmin=-1, zmax=1,
+                    text=[[f"{v:.2f}" for v in row] for row in corr.values],
+                    texttemplate="%{text}",
+                    hovertemplate="%{y} × %{x}: %{z:.2f}<extra></extra>",
+                ))
+                fig_corr.update_layout(
+                    height=max(250, len(tickers_held) * 80),
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
+                    paper_bgcolor=PLOTLY_BG,
+                    plot_bgcolor=PLOTLY_BG,
+                )
+                st.plotly_chart(fig_corr, use_container_width=True,
+                                config={"displayModeBar": False})
+        else:
+            st.info("Add 2+ positions to see correlation matrix.")
+
+        st.divider()
+
+        # ----------------------------------------------------------------
+        # Section: Stock Signals (β / Analyst Target)
+        # ----------------------------------------------------------------
+        st.subheader("🔍 Stock Signals")
+
+        signals_rows = []
+        today_d = date.today()
+        for p in positions_all:
+            a = analytics_map.get(p.ticker, {})
+            beta = a.get("beta")
+            target = a.get("target_mean_price")
+            currency = a.get("currency", "JPY" if p.market == "JP" else "USD")
+
+            upside_str = "N/A"
+            if target is not None and p.current_price > 0:
+                if p.market == "US":
+                    upside = (target / p.current_price - 1) * 100
+                else:
+                    # JP stocks: target is in JPY, current_price is in JPY
+                    upside = (target / p.current_price - 1) * 100
+                upside_str = f"{upside:+.1f}%"
+
+            if target is not None:
+                target_str = f"¥{target:,.0f}" if p.market == "JP" else f"${target:,.2f}"
+            else:
+                target_str = "N/A"
+
+            signals_rows.append({
+                "Name": p.name,
+                "β (Beta)": f"{beta:.2f}" if beta is not None else "N/A",
+                "Analyst Target": target_str,
+                "Current": f"¥{p.current_price:,.0f}" if p.market == "JP" else f"${p.current_price:,.2f}",
+                "Upside": upside_str,
+            })
+
+        st.dataframe(pd.DataFrame(signals_rows), use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        # ----------------------------------------------------------------
+        # Section: Earnings Calendar
+        # ----------------------------------------------------------------
+        st.subheader("📅 Earnings Calendar")
+
+        earnings_rows = []
+        for p in positions_all:
+            a = analytics_map.get(p.ticker, {})
+            ed = a.get("next_earnings_date")
+            if ed is not None:
+                days_until = (ed - today_d).days
+                earnings_rows.append({
+                    "Name": p.name,
+                    "Ticker": p.ticker,
+                    "Next Earnings": ed.strftime("%Y-%m-%d"),
+                    "Days Until": days_until,
+                })
+
+        if earnings_rows:
+            earnings_rows.sort(key=lambda x: x["Days Until"])
+            st.dataframe(pd.DataFrame(earnings_rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("No upcoming earnings data available (may not be provided for JP stocks).")
+
+        st.divider()
+
+        # ----------------------------------------------------------------
+        # Section: News Feed
+        # ----------------------------------------------------------------
+        st.subheader("📰 News")
+
+        any_news = False
+        for p in positions_all:
+            a = analytics_map.get(p.ticker, {})
+            news_items = a.get("news", [])
+            if not news_items:
+                continue
+            any_news = True
+            st.markdown(f"**{p.name}** ({p.ticker})")
+            for item in news_items[:3]:
+                title = item.get("title", "")
+                link = item.get("link", "")
+                publisher = item.get("publisher", "")
+                if not title:
+                    continue
+                pub_label = f" — {publisher}" if publisher else ""
+                if link:
+                    st.markdown(f"- [{title}]({link}){pub_label}")
+                else:
+                    st.markdown(f"- {title}{pub_label}")
+
+        if not any_news:
+            st.info("No news available for current holdings.")
 
 bottom_nav()

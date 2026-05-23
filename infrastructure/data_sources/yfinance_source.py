@@ -117,6 +117,70 @@ class YfinanceSource(PriceDataSource):
 
         return self._with_retry(_fetch, ticker)
 
+    def get_ticker_analytics(self, ticker: str) -> dict:
+        """β値・アナリスト目標株価・決算日・ニュースを一括取得する。
+
+        Args:
+            ticker: 銘柄ティッカー
+
+        Returns:
+            beta, target_mean_price, target_high_price, target_low_price,
+            next_earnings_date, currency, news を含む辞書。
+            取得失敗項目はキーが存在しないか None。
+        """
+        from datetime import datetime as _dt
+
+        result: dict = {}
+        try:
+            t = yf.Ticker(ticker)
+
+            try:
+                info = t.info or {}
+                result["beta"] = info.get("beta")
+                result["target_mean_price"] = info.get("targetMeanPrice")
+                result["target_high_price"] = info.get("targetHighPrice")
+                result["target_low_price"] = info.get("targetLowPrice")
+                result["currency"] = info.get("currency", "JPY" if ticker.endswith(".T") else "USD")
+
+                next_earnings: date | None = None
+                for ts_key in ("earningsTimestamp", "earningsTimestampStart"):
+                    ts = info.get(ts_key)
+                    if ts:
+                        try:
+                            d = _dt.fromtimestamp(int(ts)).date()
+                            if d >= date.today():
+                                next_earnings = d
+                                break
+                        except Exception:
+                            pass
+                result["next_earnings_date"] = next_earnings
+            except Exception:
+                pass
+
+            try:
+                news_raw = t.news or []
+                news: list[dict] = []
+                for item in news_raw[:5]:
+                    content = item.get("content") if isinstance(item.get("content"), dict) else {}
+                    if content:
+                        title = content.get("title", "")
+                        link = (content.get("canonicalUrl") or {}).get("url", "")
+                        publisher = (content.get("provider") or {}).get("displayName", "")
+                    else:
+                        title = item.get("title", "")
+                        link = item.get("link", "")
+                        publisher = item.get("publisher", "")
+                    if title:
+                        news.append({"title": title, "link": link, "publisher": publisher})
+                result["news"] = news
+            except Exception:
+                result["news"] = []
+
+        except Exception:
+            pass
+
+        return result
+
     def _normalize_index(self, df: pd.DataFrame) -> pd.DataFrame:
         """DataFrameのインデックスをタイムゾーンなしのDatetimeIndexに正規化する。"""
         if hasattr(df.index, "tz") and df.index.tz is not None:

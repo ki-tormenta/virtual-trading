@@ -46,6 +46,7 @@ class PositionSummary:
     unrealized_pnl_rate: float
     market_value_jpy: float    # 円換算（JPはそのまま、USはUSDJPY換算）
     unrealized_pnl_jpy: float  # 円換算
+    first_buy_date: date | None = None  # 最初の買付日
 
 
 @dataclass
@@ -163,6 +164,7 @@ class PortfolioService:
             positions = PositionRepo(session).get_all_by_account(user_id, account.id)
             tickers = [pos.ticker for pos in positions]
             stock_map = {s.ticker: s for s in StockRepo(session).get_by_tickers(tickers)}
+            first_buy_map = TransactionRepo(session).get_first_buy_dates(user_id, account.id, tickers)
             pos_data = []
             for pos in positions:
                 stock = stock_map.get(pos.ticker)
@@ -172,13 +174,14 @@ class PortfolioService:
                     stock.market if stock else ("JP" if pos.ticker.endswith(".T") else "US"),
                     pos.quantity,
                     pos.avg_buy_price,
+                    first_buy_map.get(pos.ticker),
                 ))
 
-        has_us = any(m == "US" for _, _, m, _, _ in pos_data)
+        has_us = any(m == "US" for _, _, m, _, _, _ in pos_data)
         usd_jpy = self._price_service.get_usd_jpy_rate() if has_us else 1.0
 
         result = []
-        for ticker, name, market, quantity, avg_price in pos_data:
+        for ticker, name, market, quantity, avg_price, first_buy_date in pos_data:
             current_price = self._price_service.get_close_price(ticker)
             market_value = current_price * quantity
             unrealized_pnl = (current_price - avg_price) * quantity
@@ -196,8 +199,48 @@ class PortfolioService:
                 unrealized_pnl_rate=pnl_rate,
                 market_value_jpy=market_value * rate,
                 unrealized_pnl_jpy=unrealized_pnl * rate,
+                first_buy_date=first_buy_date,
             ))
         return result
+
+    def get_sharpe_ratio(self, trading_days: int = 252) -> float | None:
+        """ポートフォリオのシャープレシオ（年率換算）を計算する。
+
+        daily_snapshots の total_assets から日次リターンを算出し、
+        (平均リターン / 標準偏差) * sqrt(trading_days) で年率換算する。
+        無リスク金利はゼロとして計算する（Phase 1 簡易版）。
+        スナップショットが 10 件未満の場合は None を返す。
+
+        Args:
+            trading_days: 年率換算に使う営業日数（デフォルト 252）
+
+        Returns:
+            年率シャープレシオ。データ不足の場合は None。
+        """
+        import math
+
+        snapshots = self.get_snapshot_history()
+        if len(snapshots) < 10:
+            return None
+
+        assets = [s.total_assets for s in snapshots]
+        returns = [
+            (assets[i] - assets[i - 1]) / assets[i - 1]
+            for i in range(1, len(assets))
+            if assets[i - 1] > 0
+        ]
+        if len(returns) < 2:
+            return None
+
+        n = len(returns)
+        mean_r = sum(returns) / n
+        variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
+        std_r = math.sqrt(variance)
+
+        if std_r == 0:
+            return None
+
+        return (mean_r / std_r) * math.sqrt(trading_days)
 
     def get_transaction_records(
         self,
