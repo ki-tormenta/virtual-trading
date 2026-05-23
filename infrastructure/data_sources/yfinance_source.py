@@ -134,28 +134,37 @@ class YfinanceSource(PriceDataSource):
         try:
             t = yf.Ticker(ticker)
 
-            try:
+            # info は rate limit で空が返ることがあるため _with_retry を使う
+            def _fetch_info() -> dict:
                 info = t.info or {}
-                result["beta"] = info.get("beta")
-                result["target_mean_price"] = info.get("targetMeanPrice")
-                result["target_high_price"] = info.get("targetHighPrice")
-                result["target_low_price"] = info.get("targetLowPrice")
-                result["currency"] = info.get("currency", "JPY" if ticker.endswith(".T") else "USD")
+                # 最低限 symbol か name のどちらかがあれば有効とみなす
+                if not (info.get("symbol") or info.get("longName") or info.get("shortName")):
+                    raise PriceNotAvailableError(f"Empty info response for {ticker}")
+                return info
 
-                next_earnings: date | None = None
-                for ts_key in ("earningsTimestamp", "earningsTimestampStart"):
-                    ts = info.get(ts_key)
-                    if ts:
-                        try:
-                            d = _dt.fromtimestamp(int(ts)).date()
-                            if d >= date.today():
-                                next_earnings = d
-                                break
-                        except Exception:
-                            pass
-                result["next_earnings_date"] = next_earnings
+            try:
+                info = self._with_retry(_fetch_info, ticker)
             except Exception:
-                pass
+                info = {}
+
+            result["beta"] = info.get("beta")
+            result["target_mean_price"] = info.get("targetMeanPrice")
+            result["target_high_price"] = info.get("targetHighPrice")
+            result["target_low_price"] = info.get("targetLowPrice")
+            result["currency"] = info.get("currency", "JPY" if ticker.endswith(".T") else "USD")
+
+            next_earnings: date | None = None
+            for ts_key in ("earningsTimestamp", "earningsTimestampStart"):
+                ts = info.get(ts_key)
+                if ts:
+                    try:
+                        d = _dt.fromtimestamp(int(ts)).date()
+                        if d >= date.today():
+                            next_earnings = d
+                            break
+                    except Exception:
+                        pass
+            result["next_earnings_date"] = next_earnings
 
             try:
                 news_raw = t.news or []

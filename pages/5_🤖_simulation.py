@@ -122,9 +122,15 @@ if st.session_state.get("sim_confirm_reset") == selected_scenario:
 
 st.divider()
 
-# USD/JPY rate — always visible regardless of active tab
+# Shared state computed once — used across multiple tabs
 _usd_jpy_rate = PriceService().get_usd_jpy_rate()
+_today = date.today()
 st.caption(f"💱 USD/JPY  **{_usd_jpy_rate:,.2f}**")
+
+try:
+    _sim_summary = psvc.get_summary()
+except Exception:
+    _sim_summary = None
 
 tab_trade, tab_positions, tab_history, tab_analytics = st.tabs(
     ["📈 Trade", "📋 Positions", "📜 History", "📊 Analytics"]
@@ -132,7 +138,7 @@ tab_trade, tab_positions, tab_history, tab_analytics = st.tabs(
 
 
 # ---------------------------------------------------------------------------
-# Cached helpers — yfinance external data, not DB data, so cache is appropriate
+# Cached helpers — yfinance external data (not DB data)
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -143,10 +149,19 @@ def _fetch_analytics(ticker: str) -> dict:
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_close_series(ticker: str) -> pd.Series | None:
     try:
-        df = PriceService().get_price_history(ticker, period="1y")
+        df = PriceService().get_price_history(ticker, period="2y")
         return df["Close"]
     except Exception:
         return None
+
+
+def _lookup_rate(series: pd.Series | None, target: date) -> float | None:
+    """seriesから target 日以前の直近レートを返す。"""
+    if series is None:
+        return None
+    ts = pd.Timestamp(target)
+    avail = series[series.index <= ts]
+    return float(avail.iloc[-1]) if not avail.empty else None
 
 
 # ---------------------------------------------------------------------------
@@ -331,48 +346,49 @@ with tab_trade:
 # ---------------------------------------------------------------------------
 
 with tab_positions:
-    try:
-        sim_summary = psvc.get_summary()
+    if _sim_summary is None:
+        st.error("Failed to load portfolio data.")
+    else:
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Cash Balance", f"¥{sim_summary.current_cash:,.0f}")
-        c2.metric("Total Value", f"¥{sim_summary.market_value:,.0f}")
-        c3.metric("Total P&L", f"¥{sim_summary.total_pnl:+,.0f}",
-                  delta=f"{sim_summary.total_pnl_rate:+.2f}%")
+        c1.metric("Cash Balance", f"¥{_sim_summary.current_cash:,.0f}")
+        c2.metric("Total Value", f"¥{_sim_summary.market_value:,.0f}")
+        c3.metric("Total P&L", f"¥{_sim_summary.total_pnl:+,.0f}",
+                  delta=f"{_sim_summary.total_pnl_rate:+.2f}%")
         c4.metric("USD/JPY", f"{_usd_jpy_rate:,.2f}")
 
-        positions = psvc.get_positions()
-        if not positions:
-            st.info("No positions. Buy from the Trade tab.")
-        else:
-            view = st.radio("View", ["Simple", "Detail"], horizontal=True,
-                            label_visibility="collapsed", key="sim_pos_view")
-            rows_s, rows_d = [], []
-            today = date.today()
-            for p in positions:
-                is_jp_p = p.market == "JP"
-                rows_s.append({
-                    "Name": p.name,
-                    "Value (JPY)": f"{p.market_value_jpy:,.0f}¥",
-                    "Unrealized P&L (JPY)": f"{p.unrealized_pnl_jpy:+,.0f}¥",
-                    "P&L %": f"{p.unrealized_pnl_rate:+.2f}%",
-                })
-                days_held = (today - p.first_buy_date).days if p.first_buy_date else None
-                rows_d.append({
-                    "Name": p.name,
-                    "Ticker": p.ticker,
-                    "Market": p.market,
-                    "Qty": f"{p.quantity:,d} shares",
-                    "Since": p.first_buy_date.strftime("%Y-%m-%d") if p.first_buy_date else "N/A",
-                    "Days Held": f"{days_held}d" if days_held is not None else "N/A",
-                    "Avg. Cost": f"{p.avg_buy_price:,.0f}¥" if is_jp_p else f"${p.avg_buy_price:,.2f}",
-                    "Current Price": f"{p.current_price:,.0f}¥" if is_jp_p else f"${p.current_price:,.2f}",
-                    "Unrealized P&L (JPY)": f"{p.unrealized_pnl_jpy:+,.0f}¥",
-                    "P&L %": f"{p.unrealized_pnl_rate:+.2f}%",
-                })
-            st.dataframe(pd.DataFrame(rows_s if view == "Simple" else rows_d),
-                         use_container_width=True, hide_index=True)
-    except Exception as e:
-        st.error(f"Data fetch error: {e}")
+        try:
+            positions = psvc.get_positions()
+            if not positions:
+                st.info("No positions. Buy from the Trade tab.")
+            else:
+                view = st.radio("View", ["Simple", "Detail"], horizontal=True,
+                                label_visibility="collapsed", key="sim_pos_view")
+                rows_s, rows_d = [], []
+                for p in positions:
+                    is_jp_p = p.market == "JP"
+                    rows_s.append({
+                        "Name": p.name,
+                        "Value (JPY)": f"{p.market_value_jpy:,.0f}¥",
+                        "Unrealized P&L (JPY)": f"{p.unrealized_pnl_jpy:+,.0f}¥",
+                        "P&L %": f"{p.unrealized_pnl_rate:+.2f}%",
+                    })
+                    days_held = (_today - p.first_buy_date).days if p.first_buy_date else None
+                    rows_d.append({
+                        "Name": p.name,
+                        "Ticker": p.ticker,
+                        "Market": p.market,
+                        "Qty": f"{p.quantity:,d} shares",
+                        "Since": p.first_buy_date.strftime("%Y-%m-%d") if p.first_buy_date else "N/A",
+                        "Days Held": f"{days_held}d" if days_held is not None else "N/A",
+                        "Avg. Cost": f"{p.avg_buy_price:,.0f}¥" if is_jp_p else f"${p.avg_buy_price:,.2f}",
+                        "Current Price": f"{p.current_price:,.0f}¥" if is_jp_p else f"${p.current_price:,.2f}",
+                        "Unrealized P&L (JPY)": f"{p.unrealized_pnl_jpy:+,.0f}¥",
+                        "P&L %": f"{p.unrealized_pnl_rate:+.2f}%",
+                    })
+                st.dataframe(pd.DataFrame(rows_s if view == "Simple" else rows_d),
+                             use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.error(f"Data fetch error: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -389,9 +405,9 @@ with tab_history:
                 ticker_input_h = st.text_input("Ticker Symbol", placeholder="e.g. 7203 / AAPL",
                                                key="sim_ticker_filter")
             with col2:
-                from_date = st.date_input("From", value=date.today() - timedelta(days=90),
+                from_date = st.date_input("From", value=_today - timedelta(days=90),
                                           key="sim_from_date")
-                to_date = st.date_input("To", value=date.today(), key="sim_to_date")
+                to_date = st.date_input("To", value=_today, key="sim_to_date")
 
         trade_type = None
         if type_filter == "Buy (BUY)":
@@ -426,6 +442,90 @@ with tab_history:
 
 
 # ---------------------------------------------------------------------------
+# AI Prompt builder
+# ---------------------------------------------------------------------------
+
+def _build_ai_prompt(
+    summary,
+    positions: list,
+    analytics_map: dict,
+    sharpe: float | None,
+    usd_jpy: float,
+    usdjpy_series: "pd.Series | None",
+    earnings_rows: list[dict],
+    today: date,
+) -> str:
+    lines: list[str] = []
+
+    lines.append("【ポートフォリオ基本情報】")
+    if summary is not None:
+        lines.append(f"キャッシュ: ¥{summary.current_cash:,.0f}")
+        lines.append(f"総資産: ¥{summary.total_assets:,.0f}")
+    lines.append(f"シャープレシオ: {sharpe:.2f}" if sharpe is not None else "シャープレシオ: N/A（スナップショット不足）")
+    lines.append(f"USD/JPY: {usd_jpy:,.2f}")
+    lines.append("")
+
+    lines.append("【ポジション】")
+    lines.append("銘柄 | 保有数 | 買値 | 現値 | 損益% | 保有日数 | β | 目標株価 | Upside")
+    for p in positions:
+        a = analytics_map.get(p.ticker, {})
+        beta = a.get("beta")
+        target = a.get("target_mean_price")
+        days = (_today - p.first_buy_date).days if p.first_buy_date else None
+
+        avg_s = f"¥{p.avg_buy_price:,.0f}" if p.market == "JP" else f"${p.avg_buy_price:,.2f}"
+        cur_s = f"¥{p.current_price:,.0f}" if p.market == "JP" else f"${p.current_price:,.2f}"
+        tgt_s = (f"¥{target:,.0f}" if p.market == "JP" else f"${target:,.2f}") if target else "-"
+        up_s = f"{(target / p.current_price - 1) * 100:+.1f}%" if (target and p.current_price) else "-"
+        beta_s = f"{beta:.2f}" if beta is not None else "-"
+        days_s = f"{days}日" if days is not None else "-"
+        code = p.ticker.replace(".T", "")
+
+        lines.append(f"{code} | {p.quantity:,d}株 | {avg_s} | {cur_s} | {p.unrealized_pnl_rate:+.2f}% | {days_s} | {beta_s} | {tgt_s} | {up_s}")
+    lines.append("")
+
+    # FX breakdown for US stocks
+    us_fx: list[str] = []
+    for p in positions:
+        if p.market != "US" or p.first_buy_date is None:
+            continue
+        buy_rate = _lookup_rate(usdjpy_series, p.first_buy_date)
+        if buy_rate is None:
+            continue
+        stock_pnl_jpy = p.unrealized_pnl * buy_rate
+        fx_pnl_jpy = p.unrealized_pnl * (usd_jpy - buy_rate)
+        us_fx.append(
+            f"{p.ticker}: 購入時レート {buy_rate:.2f}  株価損益 {stock_pnl_jpy:+,.0f}¥ / 為替損益 {fx_pnl_jpy:+,.0f}¥"
+        )
+    if us_fx:
+        lines.append(f"【為替影響（USD/JPY現在: {usd_jpy:,.2f}）】")
+        lines.extend(us_fx)
+        lines.append("")
+
+    if earnings_rows:
+        lines.append("【次の決算】")
+        for row in earnings_rows[:6]:
+            lines.append(f"{row['Name']}: {row['Next Earnings']}（{row['Days Until']}日後）")
+        lines.append("")
+
+    news_lines: list[str] = []
+    for p in positions:
+        for item in (analytics_map.get(p.ticker, {}).get("news") or [])[:1]:
+            title = item.get("title", "")
+            if title:
+                news_lines.append(f"- {p.ticker.replace('.T', '')}: {title}")
+    if news_lines:
+        lines.append("【注目ニュース】")
+        lines.extend(news_lines[:8])
+        lines.append("")
+
+    lines.append("【質問】")
+    lines.append("今日のアクションを優先度順に教えて")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Tab: Analytics
 # ---------------------------------------------------------------------------
 
@@ -442,18 +542,18 @@ with tab_analytics:
         tickers_held = [p.ticker for p in positions_all]
         name_map = {p.ticker: p.name for p in positions_all}
 
-        # Fetch all analytics upfront (cached per ticker for 1h)
-        with st.spinner("Loading analytics data from market data provider..."):
+        with st.spinner("Loading market data..."):
             analytics_map = {t: _fetch_analytics(t) for t in tickers_held}
+            usdjpy_series = _fetch_close_series("USDJPY=X")
 
         # ----------------------------------------------------------------
-        # Section: Portfolio Risk
+        # Portfolio Risk
         # ----------------------------------------------------------------
         st.subheader("📊 Portfolio Risk")
 
-        col_sh, col_pad = st.columns([1, 3])
+        sharpe = psvc.get_sharpe_ratio()
+        col_sh, _pad = st.columns([1, 3])
         with col_sh:
-            sharpe = psvc.get_sharpe_ratio()
             if sharpe is not None:
                 st.metric("Sharpe Ratio (annualized)", f"{sharpe:.2f}")
             else:
@@ -463,14 +563,12 @@ with tab_analytics:
             st.markdown("**Return Correlation (1Y)**")
             price_frames: dict[str, pd.Series] = {}
             for t in tickers_held:
-                series = _fetch_close_series(t)
-                if series is not None:
-                    price_frames[name_map.get(t, t)] = series.pct_change().dropna()
+                s = _fetch_close_series(t)
+                if s is not None:
+                    price_frames[name_map.get(t, t)] = s.pct_change().dropna()
 
             if len(price_frames) >= 2:
-                combined = pd.DataFrame(price_frames).dropna()
-                corr = combined.corr()
-
+                corr = pd.DataFrame(price_frames).dropna().corr()
                 fig_corr = go.Figure(go.Heatmap(
                     z=corr.values,
                     x=corr.columns.tolist(),
@@ -485,8 +583,7 @@ with tab_analytics:
                     height=max(250, len(tickers_held) * 80),
                     margin=dict(l=0, r=0, t=10, b=0),
                     font=dict(family=PLOTLY_FONT, color=PLOTLY_TICK_COLOR),
-                    paper_bgcolor=PLOTLY_BG,
-                    plot_bgcolor=PLOTLY_BG,
+                    paper_bgcolor=PLOTLY_BG, plot_bgcolor=PLOTLY_BG,
                 )
                 st.plotly_chart(fig_corr, use_container_width=True,
                                 config={"displayModeBar": False})
@@ -496,79 +593,112 @@ with tab_analytics:
         st.divider()
 
         # ----------------------------------------------------------------
-        # Section: Stock Signals (β / Analyst Target)
+        # Holdings & Signals — 保有日数 + β + アナリスト情報の統合テーブル
         # ----------------------------------------------------------------
-        st.subheader("🔍 Stock Signals")
+        st.subheader("🔍 Holdings & Signals")
+        st.caption("Days · P&L% で時間効率を確認。β・目標株価・Upside は yfinance が提供する場合のみ表示。")
 
-        signals_rows = []
-        today_d = date.today()
+        holdings_rows = []
         for p in positions_all:
             a = analytics_map.get(p.ticker, {})
             beta = a.get("beta")
             target = a.get("target_mean_price")
-            currency = a.get("currency", "JPY" if p.market == "JP" else "USD")
+            days = (_today - p.first_buy_date).days if p.first_buy_date else None
 
-            upside_str = "N/A"
-            if target is not None and p.current_price > 0:
-                if p.market == "US":
-                    upside = (target / p.current_price - 1) * 100
-                else:
-                    # JP stocks: target is in JPY, current_price is in JPY
-                    upside = (target / p.current_price - 1) * 100
-                upside_str = f"{upside:+.1f}%"
+            # "17d · +10.1%" 形式で時間効率を一目で把握できるよう結合
+            days_pnl = (
+                f"{days}d · {p.unrealized_pnl_rate:+.2f}%"
+                if days is not None
+                else f"{p.unrealized_pnl_rate:+.2f}%"
+            )
+            avg_s = f"¥{p.avg_buy_price:,.0f}" if p.market == "JP" else f"${p.avg_buy_price:,.2f}"
+            cur_s = f"¥{p.current_price:,.0f}" if p.market == "JP" else f"${p.current_price:,.2f}"
+            tgt_s = (f"¥{target:,.0f}" if p.market == "JP" else f"${target:,.2f}") if target else "N/A"
+            up_s = f"{(target / p.current_price - 1) * 100:+.1f}%" if (target and p.current_price) else "N/A"
 
-            if target is not None:
-                target_str = f"¥{target:,.0f}" if p.market == "JP" else f"${target:,.2f}"
-            else:
-                target_str = "N/A"
-
-            signals_rows.append({
+            holdings_rows.append({
                 "Name": p.name,
-                "β (Beta)": f"{beta:.2f}" if beta is not None else "N/A",
-                "Analyst Target": target_str,
-                "Current": f"¥{p.current_price:,.0f}" if p.market == "JP" else f"${p.current_price:,.2f}",
-                "Upside": upside_str,
+                "Qty": f"{p.quantity:,d}",
+                "Avg Cost": avg_s,
+                "Current": cur_s,
+                "Days · P&L%": days_pnl,
+                "β": f"{beta:.2f}" if beta is not None else "N/A",
+                "Target": tgt_s,
+                "Upside": up_s,
             })
 
-        st.dataframe(pd.DataFrame(signals_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(holdings_rows), use_container_width=True, hide_index=True)
+
+        # ----------------------------------------------------------------
+        # FX Breakdown — 株価損益と為替損益の分離（米国株のみ）
+        # ----------------------------------------------------------------
+        us_positions_with_date = [
+            p for p in positions_all
+            if p.market == "US" and p.first_buy_date is not None
+        ]
+        if us_positions_with_date:
+            st.divider()
+            st.subheader("💱 FX Breakdown")
+            st.caption(
+                f"USD/JPY 現在 **{_usd_jpy_rate:,.2f}**  ／  "
+                "購入時レートと現在レートの差から株価損益・為替損益を分離"
+            )
+
+            fx_rows = []
+            for p in us_positions_with_date:
+                buy_rate = _lookup_rate(usdjpy_series, p.first_buy_date)
+                if buy_rate is None:
+                    continue
+                # 分解: 株価損益 = USD損益 × 購入時レート、為替損益 = USD損益 × レート変化分
+                stock_pnl_jpy = p.unrealized_pnl * buy_rate
+                fx_pnl_jpy = p.unrealized_pnl * (_usd_jpy_rate - buy_rate)
+                rate_delta = _usd_jpy_rate - buy_rate
+                fx_rows.append({
+                    "Name": p.name,
+                    "P&L (USD)": f"${p.unrealized_pnl:+,.2f}",
+                    "Rate Buy→Now": f"{buy_rate:.2f} → {_usd_jpy_rate:.2f}  ({rate_delta:+.2f})",
+                    "Stock P&L (¥)": f"{stock_pnl_jpy:+,.0f}¥",
+                    "FX Effect (¥)": f"{fx_pnl_jpy:+,.0f}¥",
+                    "Total P&L (¥)": f"{p.unrealized_pnl_jpy:+,.0f}¥",
+                })
+
+            if fx_rows:
+                st.dataframe(pd.DataFrame(fx_rows), use_container_width=True, hide_index=True)
 
         st.divider()
 
         # ----------------------------------------------------------------
-        # Section: Earnings Calendar
+        # Earnings Calendar
         # ----------------------------------------------------------------
         st.subheader("📅 Earnings Calendar")
 
-        earnings_rows = []
+        earnings_rows: list[dict] = []
         for p in positions_all:
-            a = analytics_map.get(p.ticker, {})
-            ed = a.get("next_earnings_date")
+            ed = analytics_map.get(p.ticker, {}).get("next_earnings_date")
             if ed is not None:
-                days_until = (ed - today_d).days
                 earnings_rows.append({
                     "Name": p.name,
                     "Ticker": p.ticker,
                     "Next Earnings": ed.strftime("%Y-%m-%d"),
-                    "Days Until": days_until,
+                    "Days Until": (ed - _today).days,
                 })
 
         if earnings_rows:
             earnings_rows.sort(key=lambda x: x["Days Until"])
             st.dataframe(pd.DataFrame(earnings_rows), use_container_width=True, hide_index=True)
         else:
-            st.info("No upcoming earnings data available (may not be provided for JP stocks).")
+            st.info("No upcoming earnings data (JP stocks may not be available via yfinance).")
 
         st.divider()
 
         # ----------------------------------------------------------------
-        # Section: News Feed
+        # News Feed
         # ----------------------------------------------------------------
         st.subheader("📰 News")
 
         any_news = False
         for p in positions_all:
-            a = analytics_map.get(p.ticker, {})
-            news_items = a.get("news", [])
+            news_items = analytics_map.get(p.ticker, {}).get("news", [])
             if not news_items:
                 continue
             any_news = True
@@ -579,13 +709,30 @@ with tab_analytics:
                 publisher = item.get("publisher", "")
                 if not title:
                     continue
-                pub_label = f" — {publisher}" if publisher else ""
-                if link:
-                    st.markdown(f"- [{title}]({link}){pub_label}")
-                else:
-                    st.markdown(f"- {title}{pub_label}")
+                pub = f" — {publisher}" if publisher else ""
+                st.markdown(f"- [{title}]({link}){pub}" if link else f"- {title}{pub}")
 
         if not any_news:
             st.info("No news available for current holdings.")
+
+        st.divider()
+
+        # ----------------------------------------------------------------
+        # AI Prompt — コピーしてそのまま Claude に貼り付け可能
+        # ----------------------------------------------------------------
+        st.subheader("🤖 AI Prompt")
+        st.caption("ページ読み込みのたびに最新データで更新されます。右上のコピーボタンで Claude に貼り付けてください。")
+
+        prompt_text = _build_ai_prompt(
+            summary=_sim_summary,
+            positions=positions_all,
+            analytics_map=analytics_map,
+            sharpe=sharpe,
+            usd_jpy=_usd_jpy_rate,
+            usdjpy_series=usdjpy_series,
+            earnings_rows=earnings_rows,
+            today=_today,
+        )
+        st.code(prompt_text, language="text")
 
 bottom_nav()
